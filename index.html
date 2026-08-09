@@ -49,11 +49,12 @@
   .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
   button {
     font-family: inherit;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: 0.01em;
-    border-radius: 5px;
-    padding: 11px 18px;
+    border-radius: 6px;
+    padding: 13px 20px;
+    min-height: 44px;
     cursor: pointer;
     border: none;
     transition: opacity .15s ease, transform .1s ease;
@@ -63,12 +64,13 @@
   .btn-primary:hover { opacity: 0.88; }
   .btn-ghost { background: transparent; color: #4B4F58; border: 1px solid #C9C6BC; }
   .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
-  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #4B4F58; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #4B4F58; min-height: 44px; }
+  .toggle-row input[type="checkbox"] { width: 20px; height: 20px; }
   .error-msg { color: #B32B22; font-size: 13px; margin-top: 10px; display: none; white-space: pre-wrap; }
 
   .color-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-  .color-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #4B4F58; }
-  .color-controls input[type="color"] { width: 32px; height: 32px; border: 1px solid #C9C6BC; border-radius: 4px; padding: 0; background: none; cursor: pointer; }
+  .color-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #4B4F58; min-height: 44px; }
+  .color-controls input[type="color"] { width: 40px; height: 40px; border: 1px solid #C9C6BC; border-radius: 6px; padding: 0; background: none; cursor: pointer; }
 
   .preview-wrap {
     margin: 24px auto 0;
@@ -82,6 +84,12 @@
   #card-canvas { display: block; width: 100%; height: auto; background: #fff; }
 
   .download-row { margin-top: 16px; display: none; justify-content: center; gap: 10px; }
+
+  @media (max-width: 480px) {
+    body { padding: 16px 12px 40px; }
+    textarea { height: 160px; }
+    .intro h1 { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
@@ -107,7 +115,7 @@
     </div>
 
     <div class="download-row" id="download-row">
-      <button class="btn-primary" id="btn-download">PNG로 다운로드 (1080×1350)</button>
+      <button class="btn-primary" id="btn-download">PNG로 다운로드</button>
     </div>
   </div>
 
@@ -355,7 +363,7 @@
     ctx.fillStyle = INK;
     ctx.fillText('영업이익', lx, legendY);
 
-    ctx.font = font(600, 26);
+    ctx.font = font(600, 27);
     ctx.fillStyle = INK_SOFT;
     ctx.textAlign = 'right';
     ctx.fillText('연결 기준, 단위 : ' + unitLabel, contentX + CONTENT_W, legendY - 2);
@@ -374,10 +382,10 @@
     ctx.lineTo(contentX + CONTENT_W, cursorY);
     ctx.stroke();
 
-    ctx.font = font(700, 26);
+    ctx.font = font(700, 27);
     ctx.fillStyle = '#3A3E46';
     ctx.textAlign = 'left';
-    ctx.fillText('자료 : 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 26 * 0.85);
+    ctx.fillText('자료 : 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 27 * 0.85);
 
     if (showGuide) {
       ctx.save();
