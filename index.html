@@ -1,33 +1,34 @@
-<div id="app-root"></div>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>분기 실적 카드 생성기</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
-  
-  #app-root {
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+
+  :root {
     --stage: #EFEDE6;
     --card-bg: #FFFFFF;
     --ink: #16181D;
     --ink-soft: #6B7078;
     --rule: #E6E4DD;
-    --rev-color: #A9C9EC;
-    --rev-color-dark: #7FA9D9;
-    --op-color: #16294F;
-    --up: #D6362C;
-    --down: #2860B8;
     --gold: #B8862E;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
     font-family: 'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
     background: var(--stage);
-    padding: 32px 16px 60px;
-    box-sizing: border-box;
-    min-height: 100vh;
     color: var(--ink);
   }
-  #app-root * { box-sizing: border-box; }
+  body { padding: 24px 16px 60px; }
 
   .shell { max-width: 720px; margin: 0 auto; }
 
   .intro { margin-bottom: 18px; }
-  .intro h1 { font-size: 15px; font-weight: 700; margin: 0 0 4px; color: #24272E; }
-  .intro p { font-size: 12.5px; margin: 0; line-height: 1.6; color: #6B7078; }
+  .intro h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; color: #24272E; }
+  .intro p { font-size: 13px; margin: 0; line-height: 1.6; color: #6B7078; }
 
   textarea {
     width: 100%;
@@ -37,8 +38,8 @@
     color: #E7E7E0;
     border-radius: 6px;
     padding: 14px;
-    font-family: 'Noto Sans KR', ui-monospace, monospace;
-    font-size: 12px;
+    font-family: 'Noto Sans KR', monospace;
+    font-size: 13px;
     line-height: 1.6;
     resize: vertical;
     margin-top: 10px;
@@ -48,11 +49,11 @@
   .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
   button {
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.01em;
     border-radius: 5px;
-    padding: 10px 18px;
+    padding: 11px 18px;
     cursor: pointer;
     border: none;
     transition: opacity .15s ease, transform .1s ease;
@@ -62,103 +63,61 @@
   .btn-primary:hover { opacity: 0.88; }
   .btn-ghost { background: transparent; color: #4B4F58; border: 1px solid #C9C6BC; }
   .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
-  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4B4F58; margin-left: auto; }
-  .error-msg { color: #B32B22; font-size: 12px; margin-top: 10px; display: none; }
+  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #4B4F58; }
+  .error-msg { color: #B32B22; font-size: 13px; margin-top: 10px; display: none; white-space: pre-wrap; }
 
-  /* ---- preview frame (scaled) ---- */
-  .preview-frame {
-    margin-top: 24px;
-    overflow: hidden;
+  .color-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .color-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #4B4F58; }
+  .color-controls input[type="color"] { width: 32px; height: 32px; border: 1px solid #C9C6BC; border-radius: 4px; padding: 0; background: none; cursor: pointer; }
+
+  .preview-wrap {
+    margin: 24px auto 0;
+    max-width: 520px;
+    display: none;
     box-shadow: 0 30px 60px -20px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);
     border-radius: 2px;
-    display: none;
-  }
-
-  /* ---- the actual export canvas: fixed 1080x1350 ---- */
-  .export-canvas {
-    width: 1080px;
-    height: 1350px;
-    position: relative;
-    background: var(--card-bg);
-    transform-origin: top left;
     overflow: hidden;
+    line-height: 0;
   }
+  #card-canvas { display: block; width: 100%; height: auto; background: #fff; }
 
-  .safe-guide {
-    position: absolute;
-    top: 135px; left: 50px; right: 50px; bottom: 135px;
-    border: 1.5px dashed rgba(214,54,44,0.55);
-    pointer-events: none;
-    z-index: 50;
-  }
-
-  .content-area {
-    position: absolute;
-    top: 135px; left: 50px; right: 50px; bottom: 135px;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .headline { font-size: 76px; font-weight: 900; margin: 0; line-height: 1.1; letter-spacing: -0.02em; color: #101216; white-space: nowrap; overflow: hidden; }
-
-  .header-row { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
-  .sub-headline { font-size: 26px; font-weight: 600; color: var(--ink-soft); margin: 0; }
-  .legend-row { display: flex; gap: 30px; margin: 0; }
-  .legend-row span { display: inline-flex; align-items: center; gap: 10px; font-size: 27px; font-weight: 700; color: #101216; }
-  .legend-row i { width: 28px; height: 28px; display: inline-block; border-radius: 4px; }
-
-  .chart-zone { position: relative; height: 780px; margin-top: 26px; }
-  .chart-zone svg { display: block; width: 100%; height: 100%; }
-
-  .color-controls { display: flex; align-items: center; gap: 16px; }
-  .color-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #4B4F58; }
-  .color-controls input[type="color"] { width: 28px; height: 28px; border: 1px solid #C9C6BC; border-radius: 4px; padding: 0; background: none; cursor: pointer; }
-
-  .footer-row {
-    display: flex; justify-content: space-between; align-items: flex-end;
-    font-size: 26px; color: var(--ink-soft); font-weight: 500;
-    padding-top: 18px; margin-top: 16px; border-top: 1.5px solid var(--rule);
-  }
-  .footer-row .src { font-weight: 700; color: #3A3E46; }
-
-  .download-row { margin-top: 16px; display: none; gap: 10px; }
+  .download-row { margin-top: 16px; display: none; justify-content: center; gap: 10px; }
 </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="intro">
+      <h1>분기 실적 카드 생성기 (뉴스 인포그래픽 스타일)</h1>
+      <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 50px는 데드존으로 비워둡니다.</p>
+    </div>
+    <textarea id="raw-input" spellcheck="false"></textarea>
+    <div class="controls">
+      <button class="btn-primary" id="btn-render">카드 생성</button>
+      <button class="btn-ghost" id="btn-clear">지우기</button>
+      <label class="toggle-row"><input type="checkbox" id="chk-guide"/> 안전 영역 가이드 표시</label>
+    </div>
+    <div class="controls color-controls">
+      <label>포인트 색상 <input type="color" id="color-base" value="#2E6FD9"></label>
+      <span style="font-size:12px; color:#6B7078;">매출은 밝게, 영업이익은 어둡게 자동으로 두 톤을 만들어요.</span>
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+
+    <div class="preview-wrap" id="preview-wrap">
+      <canvas id="card-canvas" width="1080" height="1350"></canvas>
+    </div>
+
+    <div class="download-row" id="download-row">
+      <button class="btn-primary" id="btn-download">PNG로 다운로드 (1080×1350)</button>
+    </div>
+  </div>
 
 <script>
 (function () {
-  const root = document.getElementById('app-root');
-
-  root.innerHTML = `
-    <div class="shell">
-      <div class="intro">
-        <h1>분기 실적 카드 생성기 (뉴스 인포그래픽 스타일)</h1>
-        <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 50px는 데드존으로 비워둡니다.</p>
-      </div>
-      <textarea id="raw-input" spellcheck="false"></textarea>
-      <div class="controls">
-        <button class="btn-primary" id="btn-render">카드 생성</button>
-        <button class="btn-ghost" id="btn-clear">지우기</button>
-        <label class="toggle-row"><input type="checkbox" id="chk-guide"/> 안전 영역 가이드 표시</label>
-      </div>
-      <div class="controls color-controls">
-        <label>포인트 색상 <input type="color" id="color-base" value="#2E6FD9"></label>
-        <span style="font-size:12px; color:#6B7078;">매출은 밝게, 영업이익은 어둡게 자동으로 두 톤을 만들어요.</span>
-      </div>
-      <div class="error-msg" id="error-msg"></div>
-
-      <div class="preview-frame" id="preview-frame">
-        <div class="export-canvas" id="export-canvas">
-          <div class="safe-guide" id="safe-guide" style="display:none;"></div>
-          <div class="content-area" id="content-area"></div>
-        </div>
-      </div>
-
-      <div class="download-row" id="download-row">
-        <button class="btn-primary" id="btn-download">PNG로 다운로드 (1080×1350)</button>
-      </div>
-    </div>
-  `;
+  const CANVAS_W = 1080, CANVAS_H = 1350;
+  const SAFE_TOP = 135, SAFE_BOTTOM = 135, SAFE_LEFT = 50, SAFE_RIGHT = 50;
+  const CONTENT_W = CANVAS_W - SAFE_LEFT - SAFE_RIGHT; // 980
+  const CONTENT_H = CANVAS_H - SAFE_TOP - SAFE_BOTTOM;  // 1080
+  const INK = '#101216', INK_SOFT = '#6B7078', RULE = '#E6E4DD';
 
   const SAMPLE = `2026.08.07 16:34:55
 기업명: DB(시가총액: 2,935억) A012030
@@ -175,38 +134,71 @@
 공시링크: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260807800722
 회사정보: https://finance.naver.com/item/main.nhn?code=012030`;
 
-  document.getElementById('raw-input').value = SAMPLE;
-
+  const rawInput = document.getElementById('raw-input');
   const errEl = document.getElementById('error-msg');
-  const previewFrame = document.getElementById('preview-frame');
-  const exportCanvas = document.getElementById('export-canvas');
-  const safeGuide = document.getElementById('safe-guide');
-  const contentArea = document.getElementById('content-area');
+  const previewWrap = document.getElementById('preview-wrap');
+  const canvas = document.getElementById('card-canvas');
+  const chkGuide = document.getElementById('chk-guide');
+  const colorInput = document.getElementById('color-base');
   const downloadRow = document.getElementById('download-row');
 
-  const CANVAS_W = 1080, CANVAS_H = 1350;
+  rawInput.value = SAMPLE;
 
-  function fitScale() {
-    const target = Math.min(720, window.innerWidth - 32);
-    const scale = Math.min(0.55, target / CANVAS_W);
-    exportCanvas.style.transform = 'scale(' + scale + ')';
-    previewFrame.style.width = (CANVAS_W * scale) + 'px';
-    previewFrame.style.height = (CANVAS_H * scale) + 'px';
-    return scale;
-  }
-  fitScale();
-  window.addEventListener('resize', fitScale);
-
-  document.getElementById('chk-guide').addEventListener('change', function (e) {
-    safeGuide.style.display = e.target.checked ? 'block' : 'none';
-  });
-
-  document.getElementById('color-base').addEventListener('input', function () {
-    if (lastData) render(lastData);
-  });
-
+  // ---------- parsing ----------
   function toNumber(str) { return parseFloat(String(str).replace(/,/g, '').trim()); }
 
+  function fmtWon(eok) {
+    if (eok === null || eok === undefined || isNaN(eok)) return '-';
+    const sign = eok < 0 ? '-' : '';
+    const abs = Math.abs(eok);
+    if (abs >= 10000) {
+      const jo = Math.floor(abs / 10000);
+      const rem = Math.round(abs - jo * 10000);
+      if (rem === 0) return sign + jo + '조';
+      return sign + jo + '조 ' + rem.toLocaleString('ko-KR');
+    }
+    return sign + Math.round(abs).toLocaleString('ko-KR');
+  }
+
+  function parseReport(text) {
+    const clean = text.replace(/\r\n/g, '\n');
+
+    const nameMatch = clean.match(/기업명\s*:\s*([^(]+)\(시가총액\s*:\s*([^)]+)\)\s*([A-Za-z0-9]+)/);
+    if (!nameMatch) throw new Error('기업명 줄을 찾을 수 없습니다. "기업명: 회사명(시가총액: N억) 코드" 형식인지 확인해주세요.');
+    const companyName = nameMatch[1].trim();
+    const marketCap = nameMatch[2].trim();
+    const stockCode = nameMatch[3].trim();
+
+    // 예상치 부분은 표기 형식이 제각각(-, +, %, 공백 등)이고 카드에는 어차피 쓰지 않으므로
+    // "라벨 : 실제값억" 까지만 정확히 잡고 그 뒤(예상치 괄호)는 무시한다.
+    function parseCurrentLine(label) {
+      const re = new RegExp(label + '\\s*:\\s*(-?[\\d,]+)억');
+      const m = clean.match(re);
+      if (!m) return null;
+      return { actual: toNumber(m[1]) };
+    }
+
+    const revenueNow = parseCurrentLine('매출액');
+    const opProfitNow = parseCurrentLine('영업익');
+    if (!revenueNow || !opProfitNow) throw new Error('매출액/영업익 줄을 찾을 수 없습니다.');
+
+    const trendRe = /(\d{4})\.(\d)Q\s+(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억/g;
+    const trend = [];
+    let m;
+    while ((m = trendRe.exec(clean)) !== null) {
+      trend.push({
+        year: parseInt(m[1], 10), q: parseInt(m[2], 10),
+        label: m[1] + '.' + m[2] + 'Q',
+        revenue: toNumber(m[3]), opProfit: toNumber(m[4]), netIncome: toNumber(m[5])
+      });
+    }
+    if (trend.length === 0) throw new Error('"최근 실적 추이" 목록을 찾을 수 없습니다. "YYYY.NQ 매출/영업익/순이익" 형식인지 확인해주세요.');
+    trend.reverse(); // oldest -> newest
+
+    return { companyName, marketCap, stockCode, revenueNow, opProfitNow, trend };
+  }
+
+  // ---------- color ----------
   function hexToHsl(hex) {
     let r = parseInt(hex.slice(1, 3), 16) / 255;
     let g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -226,7 +218,6 @@
     }
     return { h, s: s * 100, l: l * 100 };
   }
-
   function hslToHex(h, s, l) {
     s /= 100; l /= 100;
     const c = (1 - Math.abs(2 * l - 1)) * s;
@@ -239,275 +230,243 @@
     const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
     return '#' + toHex(r) + toHex(g) + toHex(b);
   }
-
-  // derive a light tint (revenue) and a deep shade (op profit) from one point color
   function deriveColors(baseHex) {
     const { h, s } = hexToHsl(baseHex);
-    const revenue = hslToHex(h, Math.max(s - 8, 22), 76);
-    const opProfit = hslToHex(h, Math.min(s + 10, 95), 24);
-    return { revenue, opProfit };
-  }
-
-  // Korean won formatter: >=10000 eok -> "X조 Y,YYY", else plain comma number
-  function fmtWon(eok, opts) {
-    opts = opts || {};
-    if (eok === null || eok === undefined || isNaN(eok)) return '-';
-    const sign = eok < 0 ? '-' : '';
-    const abs = Math.abs(eok);
-    if (abs >= 10000) {
-      const jo = Math.floor(abs / 10000);
-      const rem = Math.round(abs - jo * 10000);
-      if (rem === 0) return sign + jo + '조';
-      return sign + jo + '조 ' + rem.toLocaleString('ko-KR');
-    }
-    return sign + Math.round(abs).toLocaleString('ko-KR') + (opts.suffix ? opts.suffix : '');
-  }
-
-  function parseReport(text) {
-    const clean = text.replace(/\r\n/g, '\n');
-
-    const dateMatch = clean.match(/(\d{4}\.\d{2}\.\d{2}\s+\d{2}:\d{2}(:\d{2})?)/);
-    const releasedAt = dateMatch ? dateMatch[1] : null;
-
-    const nameMatch = clean.match(/기업명\s*:\s*([^\(]+)\(시가총액\s*:\s*([^)]+)\)\s*([A-Za-z0-9]+)/);
-    if (!nameMatch) throw new Error('기업명 줄을 찾을 수 없습니다. "기업명: 회사명(시가총액: N억) 코드" 형식인지 확인해주세요.');
-    const companyName = nameMatch[1].trim();
-    const marketCap = nameMatch[2].trim();
-    const stockCode = nameMatch[3].trim();
-
-    function parseCurrentLine(label) {
-      const re = new RegExp(label + '\\s*:\\s*(-?[\\d,]+)억\\s*\\(예상치\\s*:\\s*(?:(-?[\\d,]+)억\\s*/\\s*(-?[\\d.]+)%|-)\\)');
-      const m = clean.match(re);
-      if (!m) return null;
-      return {
-        actual: toNumber(m[1]),
-        estimate: m[2] !== undefined ? toNumber(m[2]) : null,
-        deltaPct: m[3] !== undefined ? parseFloat(m[3]) : null
-      };
-    }
-
-    const revenueNow = parseCurrentLine('매출액');
-    const opProfitNow = parseCurrentLine('영업익');
-    const netIncomeNow = parseCurrentLine('순이익');
-    if (!revenueNow || !opProfitNow) throw new Error('매출액/영업익 예상치 줄을 찾을 수 없습니다.');
-
-    const trendRe = /(\d{4})\.(\d)Q\s+(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억/g;
-    const trend = [];
-    let m;
-    while ((m = trendRe.exec(clean)) !== null) {
-      trend.push({
-        year: parseInt(m[1], 10), q: parseInt(m[2], 10),
-        label: m[1] + '.' + m[2] + 'Q',
-        revenue: toNumber(m[3]), opProfit: toNumber(m[4]), netIncome: toNumber(m[5])
-      });
-    }
-    if (trend.length === 0) throw new Error('"최근 실적 추이" 목록을 찾을 수 없습니다. "YYYY.NQ 매출/영업익/순이익" 형식인지 확인해주세요.');
-    trend.reverse(); // oldest -> newest
-
-    const dartMatch = clean.match(/공시링크\s*:\s*(\S+)/);
-    const naverMatch = clean.match(/회사정보\s*:\s*(\S+)/);
-
     return {
-      releasedAt, companyName, marketCap, stockCode,
-      revenueNow, opProfitNow, netIncomeNow, trend,
-      dartLink: dartMatch ? dartMatch[1] : null,
-      naverLink: naverMatch ? naverMatch[1] : null
+      revenue: hslToHex(h, Math.max(s - 8, 22), 76),
+      opProfit: hslToHex(h, Math.min(s + 10, 95), 24)
     };
   }
 
-  function buildChartSVG(trend, revColor, opColor) {
-    const W = 980, H = 780; // matches fixed chart-zone box, 1:1 px mapping (safe width = 1080 - 50*2)
+  // ---------- canvas drawing ----------
+  function font(weight, size) { return weight + ' ' + size + 'px "Noto Sans KR"'; }
+
+  function fitFontSize(ctx, text, weight, startSize, minSize, maxWidth) {
+    let size = startSize;
+    ctx.font = font(weight, size);
+    while (ctx.measureText(text).width > maxWidth && size > minSize) {
+      size -= 2;
+      ctx.font = font(weight, size);
+    }
+    return size;
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawChart(ctx, trend, revColor, opColor, ox, oy, W, H) {
     const padL = 34, padR = 34, padT = 20, padB = 118;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const n = trend.length;
     const slot = plotW / n;
-    const groupW = Math.min(180, slot * 0.8); // same bar size for every quarter
+    const groupW = Math.min(180, slot * 0.8);
     const gap = 12;
+    const barW = (groupW - gap) / 2;
 
     const maxVal = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit))) * 1.2;
+    function xGroupStart(i) { return ox + padL + slot * i + (slot - groupW) / 2; }
+    function yFor(v) { return oy + padT + plotH - (Math.max(v, 0) / maxVal) * plotH; }
+    const baseY = oy + padT + plotH;
 
-    function xGroupStart(i, gw) { return padL + slot * i + (slot - gw) / 2; }
-    function yFor(v) { return padT + plotH - (Math.max(v, 0) / maxVal) * plotH; }
+    ctx.beginPath();
+    ctx.strokeStyle = '#C9C6BC';
+    ctx.lineWidth = 2;
+    ctx.moveTo(ox + padL, baseY);
+    ctx.lineTo(ox + W - padR, baseY);
+    ctx.stroke();
 
-    let bars = '', valueLabels = '', xLabels = '';
     trend.forEach((d, i) => {
-      const isLast = i === n - 1;
-      const isFirst = i === 0;
-      const barW = (groupW - gap) / 2;
-      const gx = xGroupStart(i, groupW);
-      const revX = gx;
-      const opX = gx + barW + gap;
-      const revY = yFor(d.revenue);
-      const opY = yFor(d.opProfit);
-      const baseY = padT + plotH;
+      const isLast = i === n - 1, isFirst = i === 0;
+      const gx = xGroupStart(i);
+      const revX = gx, opX = gx + barW + gap;
+      const revY = yFor(d.revenue), opY = yFor(d.opProfit);
 
-      bars += `<rect x="${revX.toFixed(1)}" y="${revY.toFixed(1)}" width="${barW.toFixed(1)}" height="${(baseY - revY).toFixed(1)}" fill="${revColor}" rx="3"/>`;
-      bars += `<rect x="${opX.toFixed(1)}" y="${opY.toFixed(1)}" width="${barW.toFixed(1)}" height="${(baseY - opY).toFixed(1)}" fill="${opColor}" rx="3"/>`;
+      ctx.fillStyle = revColor;
+      ctx.beginPath(); roundRectPath(ctx, revX, revY, barW, baseY - revY, 3); ctx.fill();
+      ctx.fillStyle = opColor;
+      ctx.beginPath(); roundRectPath(ctx, opX, opY, barW, baseY - opY, 3); ctx.fill();
 
       const valFontSize = isLast ? 46 : 32;
       const valGap = isLast ? 20 : 16;
-      valueLabels += `<text x="${(revX + barW/2).toFixed(1)}" y="${(revY - valGap).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${valFontSize}" font-weight="800" fill="#101216">${fmtWon(d.revenue)}</text>`;
-      valueLabels += `<text x="${(opX + barW/2).toFixed(1)}" y="${(opY - valGap).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${valFontSize}" font-weight="800" fill="#101216">${fmtWon(d.opProfit)}</text>`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = INK;
+      ctx.font = font(800, valFontSize);
+      ctx.fillText(fmtWon(d.revenue), revX + barW / 2, revY - valGap);
+      ctx.fillText(fmtWon(d.opProfit), opX + barW / 2, opY - valGap);
 
       const cx = gx + groupW / 2;
       const qFontSize = isLast ? 40 : 32;
-      const yearFontSize = 32; // always same as the normal (non-emphasized) quarter label size
-      const yearLine = (isFirst || isLast)
-        ? `<tspan x="${cx.toFixed(1)}" dy="${(qFontSize + 8)}" font-size="${yearFontSize}" font-weight="600" fill="#5B6172">${d.year}년${isLast ? ' (잠정)' : ''}</tspan>`
-        : '';
-      xLabels += `<text x="${cx.toFixed(1)}" y="${(baseY + 46).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${qFontSize}" font-weight="800" fill="${isLast ? opColor : '#101216'}">${d.q}분기${yearLine}</text>`;
-    });
+      ctx.font = font(800, qFontSize);
+      ctx.fillStyle = isLast ? opColor : INK;
+      ctx.fillText(d.q + '분기', cx, baseY + 46);
 
-    return {
-      svg: `
-        <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-          <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#C9C6BC" stroke-width="2"/>
-          ${bars}
-          ${valueLabels}
-          ${xLabels}
-        </svg>
-      `
-    };
+      if (isFirst || isLast) {
+        ctx.font = font(600, 32);
+        ctx.fillStyle = INK_SOFT;
+        ctx.fillText(d.year + '년' + (isLast ? ' (잠정)' : ''), cx, baseY + 46 + qFontSize + 8);
+      }
+    });
   }
 
-  function render(data) {
-    const trend = data.trend;
+  function drawCard(ctx, data, revColor, opColor, showGuide) {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
+    const trend = data.trend;
     const maxAll = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit)));
     const unitLabel = maxAll >= 10000 ? '조원' : '억원';
 
-    const baseColor = document.getElementById('color-base').value;
-    const { revenue: revColor, opProfit: opColor } = deriveColors(baseColor);
+    let cursorY = SAFE_TOP;
+    const contentX = SAFE_LEFT;
 
-    const chart = buildChartSVG(trend, revColor, opColor);
+    ctx.textBaseline = 'alphabetic';
+    const headlineText = data.companyName + ' 실적 추이';
+    const headlineSize = fitFontSize(ctx, headlineText, 900, 76, 30, CONTENT_W);
+    ctx.font = font(900, headlineSize);
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'left';
+    const headlineLineH = headlineSize * 1.1;
+    cursorY += headlineLineH * 0.92;
+    ctx.fillText(headlineText, contentX, cursorY);
+    cursorY += headlineLineH * 0.18 + 22;
 
-    contentArea.innerHTML = `
-      <h2 class="headline">${data.companyName} 실적 추이</h2>
-      <div class="header-row">
-        <div class="legend-row">
-          <span><i style="background:${revColor};"></i>매출</span>
-          <span><i style="background:${opColor};"></i>영업이익</span>
-        </div>
-        <p class="sub-headline">연결 기준, 단위 : ${unitLabel}</p>
-      </div>
+    const legendY = cursorY + 20;
+    ctx.font = font(700, 27);
+    ctx.textAlign = 'left';
+    let lx = contentX;
+    const swatch = 28;
+    ctx.fillStyle = revColor;
+    ctx.beginPath(); roundRectPath(ctx, lx, legendY - swatch + 6, swatch, swatch, 4); ctx.fill();
+    lx += swatch + 10;
+    ctx.fillStyle = INK;
+    ctx.fillText('매출', lx, legendY);
+    lx += ctx.measureText('매출').width + 30;
+    ctx.fillStyle = opColor;
+    ctx.beginPath(); roundRectPath(ctx, lx, legendY - swatch + 6, swatch, swatch, 4); ctx.fill();
+    lx += swatch + 10;
+    ctx.fillStyle = INK;
+    ctx.fillText('영업이익', lx, legendY);
 
-      <div class="chart-zone">
-        ${chart.svg}
-      </div>
+    ctx.font = font(600, 26);
+    ctx.fillStyle = INK_SOFT;
+    ctx.textAlign = 'right';
+    ctx.fillText('연결 기준, 단위 : ' + unitLabel, contentX + CONTENT_W, legendY - 2);
 
-      <div class="footer-row">
-        <span class="src">자료: 금융감독원 전자공시시스템(DART)</span>
-      </div>
-    `;
+    cursorY = legendY + 6 + 24;
 
-    previewFrame.style.display = 'block';
-    downloadRow.style.display = 'flex';
-    fitScale();
-    fitHeadline();
-  }
+    const chartH = 780;
+    const chartTop = cursorY;
+    drawChart(ctx, trend, revColor, opColor, contentX, chartTop, CONTENT_W, chartH);
+    cursorY = chartTop + chartH + 16;
 
-  // shrink the headline font until it fits within the safe-area width,
-  // so long company names never spill into the 50px side dead zone.
-  function fitHeadline() {
-    const headlineEl = contentArea.querySelector('.headline');
-    if (!headlineEl) return;
-    let size = 76;
-    headlineEl.style.fontSize = size + 'px';
-    while (headlineEl.scrollWidth > headlineEl.clientWidth && size > 30) {
-      size -= 2;
-      headlineEl.style.fontSize = size + 'px';
+    ctx.beginPath();
+    ctx.strokeStyle = RULE;
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(contentX, cursorY);
+    ctx.lineTo(contentX + CONTENT_W, cursorY);
+    ctx.stroke();
+
+    ctx.font = font(700, 26);
+    ctx.fillStyle = '#3A3E46';
+    ctx.textAlign = 'left';
+    ctx.fillText('자료: 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 26 * 0.85);
+
+    if (showGuide) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(214,54,44,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 5]);
+      ctx.strokeRect(SAFE_LEFT, SAFE_TOP, CONTENT_W, CONTENT_H);
+      ctx.restore();
     }
   }
 
-  function downloadPNG(filenameBase) {
-    const guideWasOn = safeGuide.style.display === 'block';
-    safeGuide.style.display = 'none'; // never export the guide lines
-
-    const w = CANVAS_W, h = CANVAS_H;
-    const clone = exportCanvas.cloneNode(true);
-    clone.style.transform = 'none';
-    const guideInClone = clone.querySelector('.safe-guide');
-    if (guideInClone) guideInClone.remove();
-
-    const styleTags = Array.from(document.querySelectorAll('style')).map(s => s.outerHTML).join('\n');
-
-    const foreignSVG = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-        <foreignObject width="100%" height="100%">
-          <div xmlns="http://www.w3.org/1999/xhtml">
-            ${styleTags}
-            <div id="app-root" style="padding:0; background:transparent; min-height:auto;">
-              ${clone.outerHTML}
-            </div>
-          </div>
-        </foreignObject>
-      </svg>
-    `;
-
-    const svgBlob = new Blob([foreignSVG], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-    const img = new Image();
-    img.onload = function () {
-      const scale = 2; // -> 2160x2700 output
-      const canvas = document.createElement('canvas');
-      canvas.width = w * scale;
-      canvas.height = h * scale;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(scale, scale);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
-      canvas.toBlob(function (blob) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filenameBase + '_1080x1350.png';
-        a.click();
-        safeGuide.style.display = guideWasOn ? 'block' : 'none';
-      });
-    };
-    img.onerror = function () {
-      errEl.textContent = '이미지 변환에 실패했습니다. 다시 시도해주세요.';
-      errEl.style.display = 'block';
-      safeGuide.style.display = guideWasOn ? 'block' : 'none';
-    };
-    img.src = url;
+  // ---------- font loading ----------
+  function ensureFonts() {
+    const weights = ['400', '500', '600', '700', '800', '900'];
+    const specs = weights.map(w => document.fonts.load(w + ' 32px "Noto Sans KR"'));
+    return Promise.all(specs).then(() => document.fonts.ready).catch(() => {});
   }
 
+  // ---------- orchestration ----------
   let lastData = null;
+  let fontsLoaded = false;
 
-  document.getElementById('btn-render').addEventListener('click', function () {
+  function doRender() {
     errEl.style.display = 'none';
-    const raw = document.getElementById('raw-input').value;
+    const raw = rawInput.value;
+    let data;
     try {
-      const data = parseReport(raw);
-      lastData = data;
-      render(data);
+      data = parseReport(raw);
     } catch (e) {
-      previewFrame.style.display = 'none';
+      previewWrap.style.display = 'none';
       downloadRow.style.display = 'none';
       errEl.textContent = e.message;
       errEl.style.display = 'block';
+      return;
     }
-  });
+    lastData = data;
 
+    const baseColor = colorInput.value;
+    const { revenue, opProfit } = deriveColors(baseColor);
+    const ctx = canvas.getContext('2d');
+    drawCard(ctx, data, revenue, opProfit, chkGuide.checked);
+
+    previewWrap.style.display = 'block';
+    downloadRow.style.display = 'flex';
+  }
+
+  async function render() {
+    if (!fontsLoaded) {
+      await ensureFonts();
+      fontsLoaded = true;
+    }
+    doRender();
+  }
+
+  document.getElementById('btn-render').addEventListener('click', render);
   document.getElementById('btn-clear').addEventListener('click', function () {
-    document.getElementById('raw-input').value = '';
-    previewFrame.style.display = 'none';
+    rawInput.value = '';
+    previewWrap.style.display = 'none';
     downloadRow.style.display = 'none';
     errEl.style.display = 'none';
   });
+  chkGuide.addEventListener('change', function () { if (lastData) doRender(); });
+  colorInput.addEventListener('input', function () { if (lastData) doRender(); });
 
   document.getElementById('btn-download').addEventListener('click', function () {
     if (!lastData) return;
-    downloadPNG(lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label);
+    const offscreen = document.createElement('canvas');
+    offscreen.width = CANVAS_W;
+    offscreen.height = CANVAS_H;
+    const octx = offscreen.getContext('2d');
+    const baseColor = colorInput.value;
+    const { revenue, opProfit } = deriveColors(baseColor);
+    drawCard(octx, lastData, revenue, opProfit, false); // never export the guide lines
+    offscreen.toBlob(function (blob) {
+      if (!blob) {
+        errEl.textContent = '이미지 생성에 실패했습니다. 브라우저를 새로고침한 뒤 다시 시도해주세요.';
+        errEl.style.display = 'block';
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label + '_1080x1350.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }, 'image/png');
   });
 
-  try {
-    const data = parseReport(SAMPLE);
-    lastData = data;
-    render(data);
-  } catch (e) { /* ignore */ }
+  render();
 })();
 </script>
+</body>
+</html>
