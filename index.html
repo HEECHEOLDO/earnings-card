@@ -377,7 +377,7 @@
     ctx.font = font(700, 26);
     ctx.fillStyle = '#3A3E46';
     ctx.textAlign = 'left';
-    ctx.fillText('자료: 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 26 * 0.85);
+    ctx.fillText('자료 : 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 26 * 0.85);
 
     if (showGuide) {
       ctx.save();
@@ -444,10 +444,12 @@
 
   document.getElementById('btn-download').addEventListener('click', function () {
     if (!lastData) return;
+    const SCALE = 3; // export at 3x for crisper text/lines (3240x4050, same 4:5 ratio)
     const offscreen = document.createElement('canvas');
-    offscreen.width = CANVAS_W;
-    offscreen.height = CANVAS_H;
+    offscreen.width = CANVAS_W * SCALE;
+    offscreen.height = CANVAS_H * SCALE;
     const octx = offscreen.getContext('2d');
+    octx.scale(SCALE, SCALE);
     const baseColor = colorInput.value;
     const { revenue, opProfit } = deriveColors(baseColor);
     drawCard(octx, lastData, revenue, opProfit, false); // never export the guide lines
@@ -459,7 +461,7 @@
       }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label + '_1080x1350.png';
+      a.download = lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label + '_' + (CANVAS_W * SCALE) + 'x' + (CANVAS_H * SCALE) + '.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, 'image/png');
