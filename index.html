@@ -71,6 +71,7 @@
   .color-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   .color-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #4B4F58; min-height: 44px; }
   .color-controls input[type="color"] { width: 40px; height: 40px; border: 1px solid #C9C6BC; border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+  .color-controls input[type="file"] { font-size: 13px; max-width: 200px; }
 
   .preview-wrap {
     margin: 24px auto 0;
@@ -107,6 +108,11 @@
     <div class="controls color-controls">
       <label>포인트 색상 <input type="color" id="color-base" value="#2E6FD9"></label>
       <span style="font-size:12px; color:#6B7078;">매출은 밝게, 영업이익은 어둡게 자동으로 두 톤을 만들어요.</span>
+    </div>
+    <div class="controls color-controls">
+      <label>회사 로고 <input type="file" id="logo-input" accept="image/*"></label>
+      <button class="btn-ghost" id="btn-remove-logo" type="button">로고 제거</button>
+      <span style="font-size:12px; color:#6B7078;">업로드하면 제목 오른쪽에 작게 들어가요. (선택)</span>
     </div>
     <div class="error-msg" id="error-msg"></div>
 
@@ -318,7 +324,7 @@
       if (isFirst || isLast) {
         ctx.font = font(600, 32);
         ctx.fillStyle = INK_SOFT;
-        ctx.fillText(d.year + '년' + (isLast ? ' (잠정)' : ''), cx, baseY + 46 + qFontSize + 8);
+        ctx.fillText(d.year + '년', cx, baseY + 46 + qFontSize + 8);
       }
     });
   }
@@ -337,13 +343,25 @@
 
     ctx.textBaseline = 'alphabetic';
     const headlineText = data.companyName + ' 실적 추이';
-    const headlineSize = fitFontSize(ctx, headlineText, 900, 76, 30, CONTENT_W);
+    const logoReserve = logoImage ? 240 : 0; // leave room for the logo on the right
+    const headlineSize = fitFontSize(ctx, headlineText, 900, 76, 30, CONTENT_W - logoReserve);
     ctx.font = font(900, headlineSize);
     ctx.fillStyle = INK;
     ctx.textAlign = 'left';
     const headlineLineH = headlineSize * 1.1;
     cursorY += headlineLineH * 0.92;
     ctx.fillText(headlineText, contentX, cursorY);
+
+    if (logoImage) {
+      const maxLogoH = 64, maxLogoW = 220;
+      let lw = logoImage.naturalWidth, lh = logoImage.naturalHeight;
+      const ratio = Math.min(maxLogoH / lh, maxLogoW / lw, 1);
+      lw *= ratio; lh *= ratio;
+      const lx = contentX + CONTENT_W - lw;
+      const ly = SAFE_TOP + (headlineLineH - lh) / 2;
+      ctx.drawImage(logoImage, lx, ly, lw, lh);
+    }
+
     cursorY += headlineLineH * 0.18 + 22;
 
     const legendY = cursorY + 20;
@@ -407,6 +425,7 @@
   // ---------- orchestration ----------
   let lastData = null;
   let fontsLoaded = false;
+  let logoImage = null;
 
   function doRender() {
     errEl.style.display = 'none';
@@ -449,6 +468,31 @@
   });
   chkGuide.addEventListener('change', function () { if (lastData) doRender(); });
   colorInput.addEventListener('input', function () { if (lastData) doRender(); });
+
+  const logoInput = document.getElementById('logo-input');
+  logoInput.addEventListener('change', function (e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      const img = new Image();
+      img.onload = function () {
+        logoImage = img;
+        if (lastData) doRender();
+      };
+      img.onerror = function () {
+        errEl.textContent = '로고 이미지를 불러오지 못했어요. 다른 파일로 시도해주세요.';
+        errEl.style.display = 'block';
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('btn-remove-logo').addEventListener('click', function () {
+    logoImage = null;
+    logoInput.value = '';
+    if (lastData) doRender();
+  });
 
   document.getElementById('btn-download').addEventListener('click', function () {
     if (!lastData) return;
