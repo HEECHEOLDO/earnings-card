@@ -1,0 +1,513 @@
+<div id="app-root"></div>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+  #app-root {
+    --stage: #EFEDE6;
+    --card-bg: #FFFFFF;
+    --ink: #16181D;
+    --ink-soft: #6B7078;
+    --rule: #E6E4DD;
+    --rev-color: #A9C9EC;
+    --rev-color-dark: #7FA9D9;
+    --op-color: #16294F;
+    --up: #D6362C;
+    --down: #2860B8;
+    --gold: #B8862E;
+    font-family: 'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    background: var(--stage);
+    padding: 32px 16px 60px;
+    box-sizing: border-box;
+    min-height: 100vh;
+    color: var(--ink);
+  }
+  #app-root * { box-sizing: border-box; }
+
+  .shell { max-width: 720px; margin: 0 auto; }
+
+  .intro { margin-bottom: 18px; }
+  .intro h1 { font-size: 15px; font-weight: 700; margin: 0 0 4px; color: #24272E; }
+  .intro p { font-size: 12.5px; margin: 0; line-height: 1.6; color: #6B7078; }
+
+  textarea {
+    width: 100%;
+    height: 190px;
+    background: #1B1E27;
+    border: 1px solid #33384A;
+    color: #E7E7E0;
+    border-radius: 6px;
+    padding: 14px;
+    font-family: 'Noto Sans KR', ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+    margin-top: 10px;
+  }
+  textarea:focus { outline: 1px solid var(--gold); border-color: var(--gold); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+  button {
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border-radius: 5px;
+    padding: 10px 18px;
+    cursor: pointer;
+    border: none;
+    transition: opacity .15s ease, transform .1s ease;
+  }
+  button:active { transform: translateY(1px); }
+  .btn-primary { background: var(--gold); color: #1A140A; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: #4B4F58; border: 1px solid #C9C6BC; }
+  .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4B4F58; margin-left: auto; }
+  .error-msg { color: #B32B22; font-size: 12px; margin-top: 10px; display: none; }
+
+  /* ---- preview frame (scaled) ---- */
+  .preview-frame {
+    margin-top: 24px;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);
+    border-radius: 2px;
+    display: none;
+  }
+
+  /* ---- the actual export canvas: fixed 1080x1350 ---- */
+  .export-canvas {
+    width: 1080px;
+    height: 1350px;
+    position: relative;
+    background: var(--card-bg);
+    transform-origin: top left;
+    overflow: hidden;
+  }
+
+  .safe-guide {
+    position: absolute;
+    top: 135px; left: 50px; right: 50px; bottom: 135px;
+    border: 1.5px dashed rgba(214,54,44,0.55);
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  .content-area {
+    position: absolute;
+    top: 135px; left: 50px; right: 50px; bottom: 135px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .headline { font-size: 76px; font-weight: 900; margin: 0; line-height: 1.1; letter-spacing: -0.02em; color: #101216; white-space: nowrap; overflow: hidden; }
+
+  .header-row { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
+  .sub-headline { font-size: 26px; font-weight: 600; color: var(--ink-soft); margin: 0; }
+  .legend-row { display: flex; gap: 30px; margin: 0; }
+  .legend-row span { display: inline-flex; align-items: center; gap: 10px; font-size: 27px; font-weight: 700; color: #101216; }
+  .legend-row i { width: 28px; height: 28px; display: inline-block; border-radius: 4px; }
+
+  .chart-zone { position: relative; height: 780px; margin-top: 26px; }
+  .chart-zone svg { display: block; width: 100%; height: 100%; }
+
+  .color-controls { display: flex; align-items: center; gap: 16px; }
+  .color-controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #4B4F58; }
+  .color-controls input[type="color"] { width: 28px; height: 28px; border: 1px solid #C9C6BC; border-radius: 4px; padding: 0; background: none; cursor: pointer; }
+
+  .footer-row {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: 26px; color: var(--ink-soft); font-weight: 500;
+    padding-top: 18px; margin-top: 16px; border-top: 1.5px solid var(--rule);
+  }
+  .footer-row .src { font-weight: 700; color: #3A3E46; }
+
+  .download-row { margin-top: 16px; display: none; gap: 10px; }
+</style>
+
+<script>
+(function () {
+  const root = document.getElementById('app-root');
+
+  root.innerHTML = `
+    <div class="shell">
+      <div class="intro">
+        <h1>분기 실적 카드 생성기 (뉴스 인포그래픽 스타일)</h1>
+        <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 50px는 데드존으로 비워둡니다.</p>
+      </div>
+      <textarea id="raw-input" spellcheck="false"></textarea>
+      <div class="controls">
+        <button class="btn-primary" id="btn-render">카드 생성</button>
+        <button class="btn-ghost" id="btn-clear">지우기</button>
+        <label class="toggle-row"><input type="checkbox" id="chk-guide"/> 안전 영역 가이드 표시</label>
+      </div>
+      <div class="controls color-controls">
+        <label>포인트 색상 <input type="color" id="color-base" value="#2E6FD9"></label>
+        <span style="font-size:12px; color:#6B7078;">매출은 밝게, 영업이익은 어둡게 자동으로 두 톤을 만들어요.</span>
+      </div>
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="preview-frame" id="preview-frame">
+        <div class="export-canvas" id="export-canvas">
+          <div class="safe-guide" id="safe-guide" style="display:none;"></div>
+          <div class="content-area" id="content-area"></div>
+        </div>
+      </div>
+
+      <div class="download-row" id="download-row">
+        <button class="btn-primary" id="btn-download">PNG로 다운로드 (1080×1350)</button>
+      </div>
+    </div>
+  `;
+
+  const SAMPLE = `2026.08.07 16:34:55
+기업명: DB(시가총액: 2,935억) A012030
+보고서명: 연결재무제표기준영업(잠정)실적(공정공시)
+매출액 : 2,300억(예상치 : -)
+영업익 : 129억(예상치 : -)
+순이익 : 252억(예상치 : -)
+**최근 실적 추이**
+2026.2Q 2,300억/ 129억/ 252억
+2026.1Q 1,668억/ 187억/ 297억
+2025.4Q 1,921억/ 24억/ -134억
+2025.3Q 1,593억/ 130억/ 267억
+2025.2Q 1,501억/ 89억/ 149억
+공시링크: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260807800722
+회사정보: https://finance.naver.com/item/main.nhn?code=012030`;
+
+  document.getElementById('raw-input').value = SAMPLE;
+
+  const errEl = document.getElementById('error-msg');
+  const previewFrame = document.getElementById('preview-frame');
+  const exportCanvas = document.getElementById('export-canvas');
+  const safeGuide = document.getElementById('safe-guide');
+  const contentArea = document.getElementById('content-area');
+  const downloadRow = document.getElementById('download-row');
+
+  const CANVAS_W = 1080, CANVAS_H = 1350;
+
+  function fitScale() {
+    const target = Math.min(720, window.innerWidth - 32);
+    const scale = Math.min(0.55, target / CANVAS_W);
+    exportCanvas.style.transform = 'scale(' + scale + ')';
+    previewFrame.style.width = (CANVAS_W * scale) + 'px';
+    previewFrame.style.height = (CANVAS_H * scale) + 'px';
+    return scale;
+  }
+  fitScale();
+  window.addEventListener('resize', fitScale);
+
+  document.getElementById('chk-guide').addEventListener('change', function (e) {
+    safeGuide.style.display = e.target.checked ? 'block' : 'none';
+  });
+
+  document.getElementById('color-base').addEventListener('input', function () {
+    if (lastData) render(lastData);
+  });
+
+  function toNumber(str) { return parseFloat(String(str).replace(/,/g, '').trim()); }
+
+  function hexToHsl(hex) {
+    let r = parseInt(hex.slice(1, 3), 16) / 255;
+    let g = parseInt(hex.slice(3, 5), 16) / 255;
+    let b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4;
+      }
+      h *= 60;
+    }
+    return { h, s: s * 100, l: l * 100 };
+  }
+
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  // derive a light tint (revenue) and a deep shade (op profit) from one point color
+  function deriveColors(baseHex) {
+    const { h, s } = hexToHsl(baseHex);
+    const revenue = hslToHex(h, Math.max(s - 8, 22), 76);
+    const opProfit = hslToHex(h, Math.min(s + 10, 95), 24);
+    return { revenue, opProfit };
+  }
+
+  // Korean won formatter: >=10000 eok -> "X조 Y,YYY", else plain comma number
+  function fmtWon(eok, opts) {
+    opts = opts || {};
+    if (eok === null || eok === undefined || isNaN(eok)) return '-';
+    const sign = eok < 0 ? '-' : '';
+    const abs = Math.abs(eok);
+    if (abs >= 10000) {
+      const jo = Math.floor(abs / 10000);
+      const rem = Math.round(abs - jo * 10000);
+      if (rem === 0) return sign + jo + '조';
+      return sign + jo + '조 ' + rem.toLocaleString('ko-KR');
+    }
+    return sign + Math.round(abs).toLocaleString('ko-KR') + (opts.suffix ? opts.suffix : '');
+  }
+
+  function parseReport(text) {
+    const clean = text.replace(/\r\n/g, '\n');
+
+    const dateMatch = clean.match(/(\d{4}\.\d{2}\.\d{2}\s+\d{2}:\d{2}(:\d{2})?)/);
+    const releasedAt = dateMatch ? dateMatch[1] : null;
+
+    const nameMatch = clean.match(/기업명\s*:\s*([^\(]+)\(시가총액\s*:\s*([^)]+)\)\s*([A-Za-z0-9]+)/);
+    if (!nameMatch) throw new Error('기업명 줄을 찾을 수 없습니다. "기업명: 회사명(시가총액: N억) 코드" 형식인지 확인해주세요.');
+    const companyName = nameMatch[1].trim();
+    const marketCap = nameMatch[2].trim();
+    const stockCode = nameMatch[3].trim();
+
+    function parseCurrentLine(label) {
+      const re = new RegExp(label + '\\s*:\\s*(-?[\\d,]+)억\\s*\\(예상치\\s*:\\s*(?:(-?[\\d,]+)억\\s*/\\s*(-?[\\d.]+)%|-)\\)');
+      const m = clean.match(re);
+      if (!m) return null;
+      return {
+        actual: toNumber(m[1]),
+        estimate: m[2] !== undefined ? toNumber(m[2]) : null,
+        deltaPct: m[3] !== undefined ? parseFloat(m[3]) : null
+      };
+    }
+
+    const revenueNow = parseCurrentLine('매출액');
+    const opProfitNow = parseCurrentLine('영업익');
+    const netIncomeNow = parseCurrentLine('순이익');
+    if (!revenueNow || !opProfitNow) throw new Error('매출액/영업익 예상치 줄을 찾을 수 없습니다.');
+
+    const trendRe = /(\d{4})\.(\d)Q\s+(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억/g;
+    const trend = [];
+    let m;
+    while ((m = trendRe.exec(clean)) !== null) {
+      trend.push({
+        year: parseInt(m[1], 10), q: parseInt(m[2], 10),
+        label: m[1] + '.' + m[2] + 'Q',
+        revenue: toNumber(m[3]), opProfit: toNumber(m[4]), netIncome: toNumber(m[5])
+      });
+    }
+    if (trend.length === 0) throw new Error('"최근 실적 추이" 목록을 찾을 수 없습니다. "YYYY.NQ 매출/영업익/순이익" 형식인지 확인해주세요.');
+    trend.reverse(); // oldest -> newest
+
+    const dartMatch = clean.match(/공시링크\s*:\s*(\S+)/);
+    const naverMatch = clean.match(/회사정보\s*:\s*(\S+)/);
+
+    return {
+      releasedAt, companyName, marketCap, stockCode,
+      revenueNow, opProfitNow, netIncomeNow, trend,
+      dartLink: dartMatch ? dartMatch[1] : null,
+      naverLink: naverMatch ? naverMatch[1] : null
+    };
+  }
+
+  function buildChartSVG(trend, revColor, opColor) {
+    const W = 980, H = 780; // matches fixed chart-zone box, 1:1 px mapping (safe width = 1080 - 50*2)
+    const padL = 34, padR = 34, padT = 20, padB = 118;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const n = trend.length;
+    const slot = plotW / n;
+    const groupW = Math.min(180, slot * 0.8); // same bar size for every quarter
+    const gap = 12;
+
+    const maxVal = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit))) * 1.2;
+
+    function xGroupStart(i, gw) { return padL + slot * i + (slot - gw) / 2; }
+    function yFor(v) { return padT + plotH - (Math.max(v, 0) / maxVal) * plotH; }
+
+    let bars = '', valueLabels = '', xLabels = '';
+    trend.forEach((d, i) => {
+      const isLast = i === n - 1;
+      const isFirst = i === 0;
+      const barW = (groupW - gap) / 2;
+      const gx = xGroupStart(i, groupW);
+      const revX = gx;
+      const opX = gx + barW + gap;
+      const revY = yFor(d.revenue);
+      const opY = yFor(d.opProfit);
+      const baseY = padT + plotH;
+
+      bars += `<rect x="${revX.toFixed(1)}" y="${revY.toFixed(1)}" width="${barW.toFixed(1)}" height="${(baseY - revY).toFixed(1)}" fill="${revColor}" rx="3"/>`;
+      bars += `<rect x="${opX.toFixed(1)}" y="${opY.toFixed(1)}" width="${barW.toFixed(1)}" height="${(baseY - opY).toFixed(1)}" fill="${opColor}" rx="3"/>`;
+
+      const valFontSize = isLast ? 46 : 32;
+      const valGap = isLast ? 20 : 16;
+      valueLabels += `<text x="${(revX + barW/2).toFixed(1)}" y="${(revY - valGap).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${valFontSize}" font-weight="800" fill="#101216">${fmtWon(d.revenue)}</text>`;
+      valueLabels += `<text x="${(opX + barW/2).toFixed(1)}" y="${(opY - valGap).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${valFontSize}" font-weight="800" fill="#101216">${fmtWon(d.opProfit)}</text>`;
+
+      const cx = gx + groupW / 2;
+      const qFontSize = isLast ? 40 : 32;
+      const yearFontSize = 32; // always same as the normal (non-emphasized) quarter label size
+      const yearLine = (isFirst || isLast)
+        ? `<tspan x="${cx.toFixed(1)}" dy="${(qFontSize + 8)}" font-size="${yearFontSize}" font-weight="600" fill="#5B6172">${d.year}년${isLast ? ' (잠정)' : ''}</tspan>`
+        : '';
+      xLabels += `<text x="${cx.toFixed(1)}" y="${(baseY + 46).toFixed(1)}" text-anchor="middle" font-family="Noto Sans KR" font-size="${qFontSize}" font-weight="800" fill="${isLast ? opColor : '#101216'}">${d.q}분기${yearLine}</text>`;
+    });
+
+    return {
+      svg: `
+        <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+          <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#C9C6BC" stroke-width="2"/>
+          ${bars}
+          ${valueLabels}
+          ${xLabels}
+        </svg>
+      `
+    };
+  }
+
+  function render(data) {
+    const trend = data.trend;
+
+    const maxAll = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit)));
+    const unitLabel = maxAll >= 10000 ? '조원' : '억원';
+
+    const baseColor = document.getElementById('color-base').value;
+    const { revenue: revColor, opProfit: opColor } = deriveColors(baseColor);
+
+    const chart = buildChartSVG(trend, revColor, opColor);
+
+    contentArea.innerHTML = `
+      <h2 class="headline">${data.companyName} 실적 추이</h2>
+      <div class="header-row">
+        <div class="legend-row">
+          <span><i style="background:${revColor};"></i>매출</span>
+          <span><i style="background:${opColor};"></i>영업이익</span>
+        </div>
+        <p class="sub-headline">연결 기준, 단위 : ${unitLabel}</p>
+      </div>
+
+      <div class="chart-zone">
+        ${chart.svg}
+      </div>
+
+      <div class="footer-row">
+        <span class="src">자료: 금융감독원 전자공시시스템(DART)</span>
+      </div>
+    `;
+
+    previewFrame.style.display = 'block';
+    downloadRow.style.display = 'flex';
+    fitScale();
+    fitHeadline();
+  }
+
+  // shrink the headline font until it fits within the safe-area width,
+  // so long company names never spill into the 50px side dead zone.
+  function fitHeadline() {
+    const headlineEl = contentArea.querySelector('.headline');
+    if (!headlineEl) return;
+    let size = 76;
+    headlineEl.style.fontSize = size + 'px';
+    while (headlineEl.scrollWidth > headlineEl.clientWidth && size > 30) {
+      size -= 2;
+      headlineEl.style.fontSize = size + 'px';
+    }
+  }
+
+  function downloadPNG(filenameBase) {
+    const guideWasOn = safeGuide.style.display === 'block';
+    safeGuide.style.display = 'none'; // never export the guide lines
+
+    const w = CANVAS_W, h = CANVAS_H;
+    const clone = exportCanvas.cloneNode(true);
+    clone.style.transform = 'none';
+    const guideInClone = clone.querySelector('.safe-guide');
+    if (guideInClone) guideInClone.remove();
+
+    const styleTags = Array.from(document.querySelectorAll('style')).map(s => s.outerHTML).join('\n');
+
+    const foreignSVG = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+        <foreignObject width="100%" height="100%">
+          <div xmlns="http://www.w3.org/1999/xhtml">
+            ${styleTags}
+            <div id="app-root" style="padding:0; background:transparent; min-height:auto;">
+              ${clone.outerHTML}
+            </div>
+          </div>
+        </foreignObject>
+      </svg>
+    `;
+
+    const svgBlob = new Blob([foreignSVG], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = function () {
+      const scale = 2; // -> 2160x2700 output
+      const canvas = document.createElement('canvas');
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(function (blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filenameBase + '_1080x1350.png';
+        a.click();
+        safeGuide.style.display = guideWasOn ? 'block' : 'none';
+      });
+    };
+    img.onerror = function () {
+      errEl.textContent = '이미지 변환에 실패했습니다. 다시 시도해주세요.';
+      errEl.style.display = 'block';
+      safeGuide.style.display = guideWasOn ? 'block' : 'none';
+    };
+    img.src = url;
+  }
+
+  let lastData = null;
+
+  document.getElementById('btn-render').addEventListener('click', function () {
+    errEl.style.display = 'none';
+    const raw = document.getElementById('raw-input').value;
+    try {
+      const data = parseReport(raw);
+      lastData = data;
+      render(data);
+    } catch (e) {
+      previewFrame.style.display = 'none';
+      downloadRow.style.display = 'none';
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', function () {
+    document.getElementById('raw-input').value = '';
+    previewFrame.style.display = 'none';
+    downloadRow.style.display = 'none';
+    errEl.style.display = 'none';
+  });
+
+  document.getElementById('btn-download').addEventListener('click', function () {
+    if (!lastData) return;
+    downloadPNG(lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label);
+  });
+
+  try {
+    const data = parseReport(SAMPLE);
+    lastData = data;
+    render(data);
+  } catch (e) { /* ignore */ }
+})();
+</script>
