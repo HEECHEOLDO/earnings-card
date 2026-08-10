@@ -274,8 +274,84 @@
     ctx.closePath();
   }
 
-  function drawChart(ctx, trend, revColor, opColor, ox, oy, W, H) {
-    const padL = 34, padR = 34, padT = 20, padB = 118;
+  // 축 범위(range)에 어울리는 "보기 좋은" 눈금 간격만 계산한다.
+  // 축 경계 자체는 데이터에 바싹 붙이고, 눈금선은 이 간격의 배수 중
+  // 범위 안에 들어오는 값에만 그린다.
+  function niceStep(range, targetTicks) {
+    const rawStep = (range || 1) / Math.max(1, targetTicks);
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let sm;
+    if (norm <= 1) sm = 1;
+    else if (norm <= 2) sm = 2;
+    else if (norm <= 2.5) sm = 2.5;
+    else if (norm <= 5) sm = 5;
+    else sm = 10;
+    return sm * mag;
+  }
+
+  // 0선(zeroY)을 기준으로 양수는 위, 음수(적자)는 아래로 그린다.
+  function drawBar(ctx, x, w, v, color, zeroY, yFor) {
+    const y = yFor(v);
+    let top, h;
+    if (v >= 0) { top = y; h = zeroY - y; }
+    else { top = zeroY; h = y - zeroY; }
+    if (h <= 0.5) return;
+    const r = Math.min(3, h / 2, w / 2);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    roundRectPath(ctx, x, top, w, h, r);
+    ctx.fill();
+  }
+
+  // 값 라벨: 양수는 막대 위, 음수는 막대 아래에 배치
+  function drawBarLabel(ctx, text, cx, v, zeroY, yFor, gap, fontSize) {
+    const y = yFor(v);
+    if (v >= 0) {
+      ctx.fillText(text, cx, y - gap);
+    } else {
+      ctx.fillText(text, cx, y + gap + fontSize * 0.82);
+    }
+  }
+
+  function drawChart(ctx, trend, revColor, opColor, ox, oy, W, H, unitLabel) {
+    const padR = 34, padT = 20, padB = 118;
+
+    // ---- 값 범위(적자 포함) 계산 ----
+    // 축 경계는 실제 데이터에 바싹 붙여 계산해 과도한 여백을 없앤다.
+    // (이렇게 해야 적자 막대와 하단 분기 라벨 사이가 벌어지지 않는다.)
+    const values = [];
+    trend.forEach(d => { values.push(d.revenue, d.opProfit); });
+    const dataMax = Math.max(...values, 0);
+    const dataMin = Math.min(...values, 0);
+    const span = (dataMax - dataMin) || 1;
+    const topPad = dataMax > 0 ? span * 0.16 : span * 0.08; // 양수 막대 위 라벨 여유
+    const botPad = dataMin < 0 ? span * 0.16 : 0;           // 음수 막대 아래 라벨 여유
+    const axisMax = dataMax + topPad;
+    const axisMin = dataMin - botPad;
+    const step = niceStep(axisMax - axisMin, 5);
+    const minorStep = step / 2;
+
+    // ---- 세로 축 눈금 값 (단위에 맞춰 표기) ----
+    function yTickText(v) {
+      if (unitLabel === '조원') {
+        const jo = (Math.round((v / 10000) * 10) / 10) || 0;
+        return jo.toLocaleString('ko-KR');
+      }
+      return (Math.round(v) || 0).toLocaleString('ko-KR');
+    }
+    const kStart = Math.ceil(axisMin / step);
+    const kEnd = Math.floor(axisMax / step);
+    const majorTicks = [];
+    for (let k = kStart; k <= kEnd; k++) majorTicks.push(k * step);
+
+    // y축 숫자 폭만큼 왼쪽 여백(gutter)을 확보
+    ctx.font = font(600, 24);
+    let maxLabelW = 0;
+    majorTicks.forEach(t => { maxLabelW = Math.max(maxLabelW, ctx.measureText(yTickText(t)).width); });
+    const padL = Math.max(34, Math.ceil(maxLabelW) + 18);
+
+    // ---- 레이아웃 ----
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const n = trend.length;
@@ -284,47 +360,87 @@
     const gap = 12;
     const barW = (groupW - gap) / 2;
 
-    const maxVal = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit))) * 1.2;
-    function xGroupStart(i) { return ox + padL + slot * i + (slot - groupW) / 2; }
-    function yFor(v) { return oy + padT + plotH - (Math.max(v, 0) / maxVal) * plotH; }
-    const baseY = oy + padT + plotH;
+    const plotTop = oy + padT;
+    const plotBottom = oy + padT + plotH;
+    const plotLeft = ox + padL;
+    const plotRight = ox + W - padR;
+    function xGroupStart(i) { return plotLeft + slot * i + (slot - groupW) / 2; }
+    function yFor(v) { return plotBottom - ((v - axisMin) / (axisMax - axisMin)) * plotH; }
+    const zeroY = yFor(0);
 
+    // ---- 보조 눈금선(주 눈금 사이, 가장 연하게) ----
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(60,62,70,0.045)';
+    const mStart = Math.ceil(axisMin / minorStep);
+    const mEnd = Math.floor(axisMax / minorStep);
+    for (let k = mStart; k <= mEnd; k++) {
+      if (k % 2 === 0) continue;            // 주 눈금과 겹치는 위치는 건너뜀
+      const gy = yFor(k * minorStep);
+      ctx.beginPath();
+      ctx.moveTo(plotLeft, gy);
+      ctx.lineTo(plotRight, gy);
+      ctx.stroke();
+    }
+    // ---- 주 눈금선(연하게) + 세로 값 ----
+    ctx.strokeStyle = 'rgba(60,62,70,0.11)';
+    majorTicks.forEach(t => {
+      const gy = yFor(t);
+      if (Math.abs(t) > 1e-6) {              // 0선은 아래에서 진하게 별도로 그림
+        ctx.beginPath();
+        ctx.moveTo(plotLeft, gy);
+        ctx.lineTo(plotRight, gy);
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+
+    // 세로 축 숫자 (왼쪽, 각 눈금선에 정렬)
+    ctx.save();
+    ctx.font = font(600, 24);
+    ctx.fillStyle = '#9AA0A8';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    majorTicks.forEach(t => {
+      ctx.fillText(yTickText(t), plotLeft - 12, yFor(t));
+    });
+    ctx.restore();
+    ctx.textBaseline = 'alphabetic';
+
+    // ---- 0선(기준선) ----
     ctx.beginPath();
     ctx.strokeStyle = '#C9C6BC';
     ctx.lineWidth = 2;
-    ctx.moveTo(ox + padL, baseY);
-    ctx.lineTo(ox + W - padR, baseY);
+    ctx.moveTo(plotLeft, zeroY);
+    ctx.lineTo(plotRight, zeroY);
     ctx.stroke();
 
     trend.forEach((d, i) => {
       const isLast = i === n - 1, isFirst = i === 0;
       const gx = xGroupStart(i);
       const revX = gx, opX = gx + barW + gap;
-      const revY = yFor(d.revenue), opY = yFor(d.opProfit);
 
-      ctx.fillStyle = revColor;
-      ctx.beginPath(); roundRectPath(ctx, revX, revY, barW, baseY - revY, 3); ctx.fill();
-      ctx.fillStyle = opColor;
-      ctx.beginPath(); roundRectPath(ctx, opX, opY, barW, baseY - opY, 3); ctx.fill();
+      drawBar(ctx, revX, barW, d.revenue, revColor, zeroY, yFor);
+      drawBar(ctx, opX, barW, d.opProfit, opColor, zeroY, yFor);
 
-      const valFontSize = isLast ? 46 : 32;
+      const valFontSize = isLast ? 40 : 32;
       const valGap = isLast ? 20 : 16;
       ctx.textAlign = 'center';
       ctx.fillStyle = INK;
       ctx.font = font(800, valFontSize);
-      ctx.fillText(fmtWon(d.revenue), revX + barW / 2, revY - valGap);
-      ctx.fillText(fmtWon(d.opProfit), opX + barW / 2, opY - valGap);
+      drawBarLabel(ctx, fmtWon(d.revenue), revX + barW / 2, d.revenue, zeroY, yFor, valGap, valFontSize);
+      drawBarLabel(ctx, fmtWon(d.opProfit), opX + barW / 2, d.opProfit, zeroY, yFor, valGap, valFontSize);
 
       const cx = gx + groupW / 2;
       const qFontSize = isLast ? 40 : 32;
       ctx.font = font(800, qFontSize);
       ctx.fillStyle = isLast ? opColor : INK;
-      ctx.fillText(d.q + '분기', cx, baseY + 46);
+      ctx.fillText(d.q + '분기', cx, plotBottom + 46);
 
       if (isFirst || isLast) {
         ctx.font = font(600, 32);
         ctx.fillStyle = INK_SOFT;
-        ctx.fillText(d.year + '년', cx, baseY + 46 + qFontSize + 8);
+        ctx.fillText(d.year + '년', cx, plotBottom + 46 + qFontSize + 8);
       }
     });
   }
@@ -390,7 +506,7 @@
 
     const chartH = 780;
     const chartTop = cursorY;
-    drawChart(ctx, trend, revColor, opColor, contentX, chartTop, CONTENT_W, chartH);
+    drawChart(ctx, trend, revColor, opColor, contentX, chartTop, CONTENT_W, chartH, unitLabel);
     cursorY = chartTop + chartH + 16;
 
     ctx.beginPath();
@@ -404,6 +520,9 @@
     ctx.fillStyle = '#3A3E46';
     ctx.textAlign = 'left';
     ctx.fillText('자료 : 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 27 * 0.85);
+    ctx.textAlign = 'right';
+    ctx.fillText('@돈굴돈굴', contentX + CONTENT_W, cursorY + 18 + 27 * 0.85);
+    ctx.textAlign = 'left';
 
     if (showGuide) {
       ctx.save();
