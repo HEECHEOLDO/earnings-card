@@ -82,7 +82,7 @@
     overflow: hidden;
     line-height: 0;
   }
-  #card-canvas { display: block; width: 100%; height: auto; background: #fff; }
+  #card-canvas { display: block; width: 100%; height: auto; background: #fff; touch-action: none; cursor: default; }
 
   .download-row { margin-top: 16px; display: none; justify-content: center; gap: 10px; }
 
@@ -113,6 +113,20 @@
       <label>회사 로고 <input type="file" id="logo-input" accept="image/*"></label>
       <button class="btn-ghost" id="btn-remove-logo" type="button">로고 제거</button>
       <span style="font-size:12px; color:#6B7078;">업로드하면 제목 오른쪽에 작게 들어가요. (선택)</span>
+    </div>
+    <div class="controls color-controls">
+      <label>이미지 추가 <input type="file" id="overlay-input" accept="image/*"></label>
+      <button class="btn-ghost" id="btn-overlay-clear" type="button">추가 이미지 전체 삭제</button>
+      <span style="font-size:12px; color:#6B7078;">원하는 이미지를 올린 뒤 미리보기에서 <b>드래그해 위치</b>를 옮기고, 아래 슬라이더로 <b>크기</b>를 조절하세요. (여러 장 가능)</span>
+    </div>
+    <div class="controls" id="overlay-edit-row" style="display:none; flex-wrap:wrap; gap:14px; align-items:center;">
+      <label class="toggle-row" style="gap:10px;">크기
+        <input type="range" id="overlay-size" min="40" max="1000" step="2" style="width:180px; height:28px;">
+        <span id="overlay-size-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
+      </label>
+      <button class="btn-ghost" id="btn-overlay-front" type="button">맨 앞으로</button>
+      <button class="btn-ghost" id="btn-overlay-delete" type="button">선택 이미지 삭제</button>
+      <span style="font-size:12px; color:#6B7078;">미리보기에서 빈 곳을 누르면 선택이 해제돼요.</span>
     </div>
     <div class="error-msg" id="error-msg"></div>
 
@@ -524,6 +538,12 @@
     ctx.fillText('@돈굴돈굴', contentX + CONTENT_W, cursorY + 18 + 27 * 0.85);
     ctx.textAlign = 'left';
 
+    // ---- 사용자 추가 이미지(오버레이) ----
+    overlays.forEach(function (ov) {
+      if (!ov.img) return;
+      ctx.drawImage(ov.img, ov.cx - ov.w / 2, ov.cy - ov.h / 2, ov.w, ov.h);
+    });
+
     if (showGuide) {
       ctx.save();
       ctx.strokeStyle = 'rgba(214,54,44,0.55)';
@@ -546,6 +566,45 @@
   let fontsLoaded = false;
   let logoImage = null;
 
+  // 사용자 추가 이미지(오버레이) 상태
+  const overlays = [];        // { img, cx, cy, w, h, aspect }
+  let selectedIndex = -1;
+  const overlayEditRow = document.getElementById('overlay-edit-row');
+  const overlaySize = document.getElementById('overlay-size');
+  const overlaySizeVal = document.getElementById('overlay-size-val');
+
+  function syncOverlayUI() {
+    const ov = overlays[selectedIndex];
+    if (ov) {
+      overlayEditRow.style.display = 'flex';
+      overlaySize.value = Math.round(ov.w);
+      overlaySizeVal.textContent = Math.round(ov.w / CANVAS_W * 100) + '%';
+    } else {
+      overlayEditRow.style.display = 'none';
+      overlaySizeVal.textContent = '–';
+    }
+  }
+
+  function drawSelection(ctx) {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ctx.save();
+    ctx.strokeStyle = '#2E6FD9';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 7]);
+    ctx.strokeRect(ov.cx - ov.w / 2, ov.cy - ov.h / 2, ov.w, ov.h);
+    ctx.restore();
+  }
+
+  // lastData 재파싱 없이 캔버스만 다시 그림(드래그/크기/색상 변경용)
+  function redraw() {
+    if (!lastData) return;
+    const { revenue, opProfit } = deriveColors(colorInput.value);
+    const ctx = canvas.getContext('2d');
+    drawCard(ctx, lastData, revenue, opProfit, chkGuide.checked);
+    drawSelection(ctx);
+  }
+
   function doRender() {
     errEl.style.display = 'none';
     const raw = rawInput.value;
@@ -560,12 +619,7 @@
       return;
     }
     lastData = data;
-
-    const baseColor = colorInput.value;
-    const { revenue, opProfit } = deriveColors(baseColor);
-    const ctx = canvas.getContext('2d');
-    drawCard(ctx, data, revenue, opProfit, chkGuide.checked);
-
+    redraw();
     previewWrap.style.display = 'block';
     downloadRow.style.display = 'flex';
   }
@@ -585,8 +639,8 @@
     downloadRow.style.display = 'none';
     errEl.style.display = 'none';
   });
-  chkGuide.addEventListener('change', function () { if (lastData) doRender(); });
-  colorInput.addEventListener('input', function () { if (lastData) doRender(); });
+  chkGuide.addEventListener('change', function () { redraw(); });
+  colorInput.addEventListener('input', function () { redraw(); });
 
   const logoInput = document.getElementById('logo-input');
   logoInput.addEventListener('change', function (e) {
@@ -597,7 +651,7 @@
       const img = new Image();
       img.onload = function () {
         logoImage = img;
-        if (lastData) doRender();
+        if (lastData) redraw();
       };
       img.onerror = function () {
         errEl.textContent = '로고 이미지를 불러오지 못했어요. 다른 파일로 시도해주세요.';
@@ -610,8 +664,134 @@
   document.getElementById('btn-remove-logo').addEventListener('click', function () {
     logoImage = null;
     logoInput.value = '';
-    if (lastData) doRender();
+    if (lastData) redraw();
   });
+
+  // ---------- 사용자 추가 이미지(오버레이) ----------
+  const overlayInput = document.getElementById('overlay-input');
+  overlayInput.addEventListener('change', function (e) {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    files.forEach(function (file, idx) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const img = new Image();
+        img.onload = function () {
+          const aspect = img.naturalWidth / img.naturalHeight || 1;
+          // 기본 크기: 카드 폭의 25%, 단 원본보다 크게 늘리지 않음
+          let w = Math.min(CANVAS_W * 0.25, img.naturalWidth);
+          w = Math.max(80, w);
+          const ov = {
+            img: img, aspect: aspect,
+            w: w, h: w / aspect,
+            // 살짝 어긋나게 쌓아 여러 장이 겹쳐도 구분되게
+            cx: CANVAS_W / 2 + idx * 24,
+            cy: CANVAS_H / 2 + idx * 24
+          };
+          overlays.push(ov);
+          selectedIndex = overlays.length - 1;
+          syncOverlayUI();
+          if (lastData) { redraw(); } else { render(); }
+        };
+        img.onerror = function () {
+          errEl.textContent = '이미지를 불러오지 못했어요. 다른 파일로 시도해주세요.';
+          errEl.style.display = 'block';
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    overlayInput.value = ''; // 같은 파일 다시 올릴 수 있게 초기화
+  });
+
+  document.getElementById('btn-overlay-clear').addEventListener('click', function () {
+    overlays.length = 0;
+    selectedIndex = -1;
+    syncOverlayUI();
+    if (lastData) redraw();
+  });
+  document.getElementById('btn-overlay-delete').addEventListener('click', function () {
+    if (selectedIndex < 0) return;
+    overlays.splice(selectedIndex, 1);
+    selectedIndex = -1;
+    syncOverlayUI();
+    redraw();
+  });
+  document.getElementById('btn-overlay-front').addEventListener('click', function () {
+    if (selectedIndex < 0) return;
+    const ov = overlays.splice(selectedIndex, 1)[0];
+    overlays.push(ov);
+    selectedIndex = overlays.length - 1;
+    syncOverlayUI();
+    redraw();
+  });
+  overlaySize.addEventListener('input', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ov.w = parseFloat(overlaySize.value);
+    ov.h = ov.w / ov.aspect;
+    overlaySizeVal.textContent = Math.round(ov.w / CANVAS_W * 100) + '%';
+    redraw();
+  });
+
+  // ---------- 미리보기 위 드래그로 위치 이동 ----------
+  function toCanvasCoords(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (CANVAS_W / r.width),
+      y: (e.clientY - r.top) * (CANVAS_H / r.height)
+    };
+  }
+  function hitTest(p) {
+    // 위에 있는 것부터(배열 뒤쪽이 앞) 검사
+    for (let i = overlays.length - 1; i >= 0; i--) {
+      const ov = overlays[i];
+      if (p.x >= ov.cx - ov.w / 2 && p.x <= ov.cx + ov.w / 2 &&
+          p.y >= ov.cy - ov.h / 2 && p.y <= ov.cy + ov.h / 2) {
+        return i;
+      }
+    }
+    return -1;
+  }
+  let dragOffset = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    if (!lastData) return;
+    const p = toCanvasCoords(e);
+    const hit = hitTest(p);
+    if (hit >= 0) {
+      selectedIndex = hit;
+      const ov = overlays[hit];
+      dragOffset = { dx: p.x - ov.cx, dy: p.y - ov.cy };
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    } else {
+      selectedIndex = -1;
+    }
+    syncOverlayUI();
+    redraw();
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (dragOffset && selectedIndex >= 0) {
+      const p = toCanvasCoords(e);
+      const ov = overlays[selectedIndex];
+      ov.cx = Math.max(0, Math.min(CANVAS_W, p.x - dragOffset.dx));
+      ov.cy = Math.max(0, Math.min(CANVAS_H, p.y - dragOffset.dy));
+      redraw();
+      e.preventDefault();
+    } else if (lastData && overlays.length) {
+      const over = hitTest(toCanvasCoords(e)) >= 0;
+      canvas.style.cursor = over ? 'grab' : 'default';
+    }
+  });
+  function endDrag(e) {
+    if (dragOffset) {
+      dragOffset = null;
+      canvas.style.cursor = 'grab';
+      try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
 
   document.getElementById('btn-download').addEventListener('click', function () {
     if (!lastData) return;
