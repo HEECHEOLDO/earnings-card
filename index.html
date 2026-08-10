@@ -88,7 +88,7 @@
     overflow: hidden;
     line-height: 0;
   }
-  #card-canvas { display: block; width: 100%; height: auto; background: #fff; touch-action: none; cursor: default; }
+  #card-canvas { display: block; width: 100%; height: auto; background: #fafaf8; touch-action: none; cursor: default; }
 
   .download-row { margin-top: 16px; display: none; justify-content: center; gap: 10px; }
 
@@ -468,7 +468,7 @@
 
   function drawCard(ctx, data, revColor, opColor, showGuide) {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = '#fafaf8';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
     // ---- '맨 뒤로' 지정 이미지: 차트/텍스트보다 먼저 그려서 뒤에 깔림 ----
