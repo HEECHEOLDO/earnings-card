@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>분기 실적 카드 생성기</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+
+  :root {
+    --stage: #EFEDE6;
+    --card-bg: #FFFFFF;
+    --ink: #16181D;
+    --ink-soft: #6B7078;
+    --rule: #E6E4DD;
+    --gold: #B8862E;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    font-family: 'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    background: var(--stage);
+    color: var(--ink);
+  }
+  body { padding: 24px 16px 60px; }
+
+  .shell { max-width: 720px; margin: 0 auto; }
+
+  .intro { margin-bottom: 18px; }
+  .intro h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; color: #24272E; }
+  .intro p { font-size: 13px; margin: 0; line-height: 1.6; color: #6B7078; }
+
+  textarea {
+    width: 100%;
+    height: 190px;
+    background: #1B1E27;
+    border: 1px solid #33384A;
+    color: #E7E7E0;
+    border-radius: 6px;
+    padding: 14px;
+    font-family: 'Noto Sans KR', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    margin-top: 10px;
+  }
+  textarea:focus { outline: 1px solid var(--gold); border-color: var(--gold); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; align-items: center; }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border-radius: 6px;
+    padding: 13px 20px;
+    min-height: 44px;
+    cursor: pointer;
+    border: none;
+    transition: opacity .15s ease, transform .1s ease;
+  }
+  button:active { transform: translateY(1px); }
+  .btn-primary { background: var(--gold); color: #1A140A; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: #4B4F58; border: 1px solid #C9C6BC; }
+  .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+  .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #4B4F58; min-height: 44px; }
+  .toggle-row input[type="checkbox"] { width: 20px; height: 20px; }
+  .error-msg { color: #B32B22; font-size: 13px; margin-top: 10px; display: none; white-space: pre-wrap; }
+
+  .color-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .color-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #4B4F58; min-height: 44px; }
+  .color-controls input[type="color"] { width: 40px; height: 40px; border: 1px solid #C9C6BC; border-radius: 6px; padding: 0; background: none; cursor: pointer; }
+  .color-controls input[type="file"] { font-size: 13px; max-width: 200px; }
+
+  .ctl-sep { width: 1px; height: 26px; background: #D8D5CC; margin: 0 2px; }
+  .ctl-group-label { font-size: 13px; color: #6B7078; }
+  #overlay-edit-row .lead { font-size: 13px; font-weight: 700; color: #3A3E46; }
+  .btn-danger { color: #B32B22; border-color: #E1B7B2; }
+  .btn-danger:hover { border-color: #B32B22; color: #B32B22; background: #FBF2F1; }
+
+  .preview-wrap {
+    margin: 24px auto 0;
+    max-width: 520px;
+    display: none;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    line-height: 0;
+  }
+  #card-canvas { display: block; width: 100%; height: auto; background: #fafaf8; touch-action: none; cursor: default; }
+
+  .download-row { margin-top: 16px; display: none; justify-content: center; gap: 10px; }
+
+  @media (max-width: 480px) {
+    body { padding: 16px 12px 40px; }
+    textarea { height: 160px; }
+    .intro h1 { font-size: 15px; }
+    .ctl-sep { display: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="intro">
+      <h1>분기 실적 카드 생성기</h1>
+      <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 100px는 데드존으로 비워둡니다.</p>
+    </div>
+    <textarea id="raw-input" spellcheck="false"></textarea>
+    <div class="controls">
+      <button class="btn-primary" id="btn-render">카드 생성</button>
+      <button class="btn-ghost" id="btn-clear">지우기</button>
+      <label class="toggle-row"><input type="checkbox" id="chk-guide"/> 안전 영역 가이드 표시</label>
+    </div>
+    <div class="controls color-controls">
+      <label>포인트 색상 <input type="color" id="color-base" value="#2E6FD9"></label>
+      <span style="font-size:12px; color:#6B7078;">매출은 밝게, 영업이익은 어둡게 자동으로 두 톤을 만들어요.</span>
+    </div>
+    <div class="controls color-controls">
+      <label>이미지 추가 <input type="file" id="overlay-input" accept="image/*"></label>
+      <button class="btn-ghost btn-danger" id="btn-overlay-clear" type="button">전체 삭제</button>
+      <span style="font-size:12px; color:#6B7078;">이미지를 올린 뒤 미리보기에서 <b>드래그해 위치</b>, 아래에서 <b>크기·순서</b>를 조절하세요. (여러 장 가능 · 빈 곳을 누르면 선택 해제)</span>
+    </div>
+    <div class="controls" id="overlay-edit-row" style="display:none; flex-wrap:wrap; gap:10px 14px; align-items:center;">
+      <span class="lead">선택한 이미지</span>
+      <span class="ctl-sep"></span>
+      <label class="toggle-row" style="gap:10px;">크기
+        <input type="range" id="overlay-size" min="40" max="1000" step="2" style="width:150px; height:28px;">
+        <span id="overlay-size-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
+      </label>
+      <span class="ctl-sep"></span>
+      <label class="toggle-row" style="gap:10px;">투명도
+        <input type="range" id="overlay-opacity" min="10" max="100" step="1" style="width:150px; height:28px;">
+        <span id="overlay-opacity-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
+      </label>
+      <span class="ctl-sep"></span>
+      <label class="toggle-row" style="gap:10px;">회전
+        <input type="range" id="overlay-rot" min="-180" max="180" step="1" style="width:150px; height:28px;">
+        <span id="overlay-rot-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
+      </label>
+      <button class="btn-ghost" id="btn-overlay-rot-reset" type="button">0°</button>
+      <span class="ctl-sep"></span>
+      <span class="ctl-group-label">순서</span>
+      <button class="btn-ghost" id="btn-overlay-front" type="button">맨 앞으로</button>
+      <button class="btn-ghost" id="btn-overlay-back" type="button">맨 뒤로</button>
+      <span class="ctl-sep"></span>
+      <button class="btn-ghost btn-danger" id="btn-overlay-delete" type="button">삭제</button>
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+
+    <div class="preview-wrap" id="preview-wrap">
+      <canvas id="card-canvas" width="1080" height="1350"></canvas>
+    </div>
+
+    <div class="download-row" id="download-row">
+      <button class="btn-primary" id="btn-download">PNG로 다운로드</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const CANVAS_W = 1080, CANVAS_H = 1350;
+  const SAFE_TOP = 135, SAFE_BOTTOM = 135, SAFE_LEFT = 100, SAFE_RIGHT = 100;
+  const CONTENT_W = CANVAS_W - SAFE_LEFT - SAFE_RIGHT; // 880
+  const CONTENT_H = CANVAS_H - SAFE_TOP - SAFE_BOTTOM;  // 1080
+  const INK = '#101216', INK_SOFT = '#6B7078', RULE = '#E6E4DD';
+
+  const SAMPLE = `2026.08.07 16:34:55
+기업명: DB(시가총액: 2,935억) A012030
+보고서명: 연결재무제표기준영업(잠정)실적(공정공시)
+매출액 : 2,300억(예상치 : -)
+영업익 : 129억(예상치 : -)
+순이익 : 252억(예상치 : -)
+**최근 실적 추이**
+2026.2Q 2,300억/ 129억/ 252억
+2026.1Q 1,668억/ 187억/ 297억
+2025.4Q 1,921억/ 24억/ -134억
+2025.3Q 1,593억/ 130억/ 267억
+2025.2Q 1,501억/ 89억/ 149억
+공시링크: https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260807800722
+회사정보: https://finance.naver.com/item/main.nhn?code=012030`;
+
+  const rawInput = document.getElementById('raw-input');
+  const errEl = document.getElementById('error-msg');
+  const previewWrap = document.getElementById('preview-wrap');
+  const canvas = document.getElementById('card-canvas');
+  const chkGuide = document.getElementById('chk-guide');
+  const colorInput = document.getElementById('color-base');
+  const downloadRow = document.getElementById('download-row');
+
+  rawInput.value = SAMPLE;
+
+  // ---------- parsing ----------
+  function toNumber(str) { return parseFloat(String(str).replace(/,/g, '').trim()); }
+
+  function fmtValue(v, unit) {
+    if (v === null || v === undefined || isNaN(v)) return '-';
+    if (unit === '조원') {
+      const jo = (Math.round(v / 10000 * 10) / 10) || 0; // 조 단위, 소수 1자리 반올림
+      return jo.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+    // 억원: 콤마 정수 (예: 21,503 / -104)
+    return (Math.round(v) || 0).toLocaleString('ko-KR');
+  }
+
+  function parseReport(text) {
+    const clean = text.replace(/\r\n/g, '\n');
+
+    const nameMatch = clean.match(/기업명\s*:\s*([^(]+)\(시가총액\s*:\s*([^)]+)\)\s*([A-Za-z0-9]+)/);
+    if (!nameMatch) throw new Error('기업명 줄을 찾을 수 없습니다. "기업명: 회사명(시가총액: N억) 코드" 형식인지 확인해주세요.');
+    const companyName = nameMatch[1].trim();
+    const marketCap = nameMatch[2].trim();
+    const stockCode = nameMatch[3].trim();
+
+    // 예상치 부분은 표기 형식이 제각각(-, +, %, 공백 등)이고 카드에는 어차피 쓰지 않으므로
+    // "라벨 : 실제값억" 까지만 정확히 잡고 그 뒤(예상치 괄호)는 무시한다.
+    function parseCurrentLine(label) {
+      const re = new RegExp(label + '\\s*:\\s*(-?[\\d,]+)억');
+      const m = clean.match(re);
+      if (!m) return null;
+      return { actual: toNumber(m[1]) };
+    }
+
+    const revenueNow = parseCurrentLine('매출액');
+    const opProfitNow = parseCurrentLine('영업익');
+    if (!revenueNow || !opProfitNow) throw new Error('매출액/영업익 줄을 찾을 수 없습니다.');
+
+    const trendRe = /(\d{4})\.(\d)Q\s+(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억\s*\/\s*(-?[\d,]+)억/g;
+    const trend = [];
+    let m;
+    while ((m = trendRe.exec(clean)) !== null) {
+      trend.push({
+        year: parseInt(m[1], 10), q: parseInt(m[2], 10),
+        label: m[1] + '.' + m[2] + 'Q',
+        revenue: toNumber(m[3]), opProfit: toNumber(m[4]), netIncome: toNumber(m[5])
+      });
+    }
+    if (trend.length === 0) throw new Error('"최근 실적 추이" 목록을 찾을 수 없습니다. "YYYY.NQ 매출/영업익/순이익" 형식인지 확인해주세요.');
+    trend.reverse(); // oldest -> newest
+
+    return { companyName, marketCap, stockCode, revenueNow, opProfitNow, trend };
+  }
+
+  // ---------- color ----------
+  function hexToHsl(hex) {
+    let r = parseInt(hex.slice(1, 3), 16) / 255;
+    let g = parseInt(hex.slice(3, 5), 16) / 255;
+    let b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4;
+      }
+      h *= 60;
+    }
+    return { h, s: s * 100, l: l * 100 };
+  }
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  }
+  function deriveColors(baseHex) {
+    const { h, s } = hexToHsl(baseHex);
+    return {
+      revenue: hslToHex(h, Math.max(s - 8, 22), 76),
+      opProfit: hslToHex(h, Math.min(s + 10, 95), 24)
+    };
+  }
+
+  // ---------- canvas drawing ----------
+  function font(weight, size) { return weight + ' ' + size + 'px "Noto Sans KR"'; }
+
+  function fitFontSize(ctx, text, weight, startSize, minSize, maxWidth) {
+    let size = startSize;
+    ctx.font = font(weight, size);
+    while (ctx.measureText(text).width > maxWidth && size > minSize) {
+      size -= 2;
+      ctx.font = font(weight, size);
+    }
+    return size;
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 축 범위(range)에 어울리는 "보기 좋은" 눈금 간격만 계산한다.
+  // 축 경계 자체는 데이터에 바싹 붙이고, 눈금선은 이 간격의 배수 중
+  // 범위 안에 들어오는 값에만 그린다.
+  function niceStep(range, targetTicks) {
+    const rawStep = (range || 1) / Math.max(1, targetTicks);
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let sm;
+    if (norm <= 1) sm = 1;
+    else if (norm <= 2) sm = 2;
+    else if (norm <= 2.5) sm = 2.5;
+    else if (norm <= 5) sm = 5;
+    else sm = 10;
+    return sm * mag;
+  }
+
+  // 0선(zeroY)을 기준으로 양수는 위, 음수(적자)는 아래로 그린다.
+  function drawBar(ctx, x, w, v, color, zeroY, yFor) {
+    const y = yFor(v);
+    let top, h;
+    if (v >= 0) { top = y; h = zeroY - y; }
+    else { top = zeroY; h = y - zeroY; }
+    if (h <= 0.5) return;
+    const r = Math.min(3, h / 2, w / 2);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    roundRectPath(ctx, x, top, w, h, r);
+    ctx.fill();
+  }
+
+  // 값 라벨: 양수는 막대 위, 음수는 막대 아래에 배치
+  function drawBarLabel(ctx, text, cx, v, zeroY, yFor, gap, fontSize) {
+    const y = yFor(v);
+    if (v >= 0) {
+      ctx.fillText(text, cx, y - gap);
+    } else {
+      ctx.fillText(text, cx, y + gap + fontSize * 0.82);
+    }
+  }
+
+  function drawChart(ctx, trend, revColor, opColor, ox, oy, W, H, unitLabel) {
+    const padR = 34, padT = 20, padB = 118;
+
+    // ---- 값 범위(적자 포함) 계산 ----
+    // 축 경계는 실제 데이터에 바싹 붙여 계산해 과도한 여백을 없앤다.
+    // (이렇게 해야 적자 막대와 하단 분기 라벨 사이가 벌어지지 않는다.)
+    const values = [];
+    trend.forEach(d => { values.push(d.revenue, d.opProfit); });
+    const dataMax = Math.max(...values, 0);
+    const dataMin = Math.min(...values, 0);
+    const span = (dataMax - dataMin) || 1;
+    const topPad = dataMax > 0 ? span * 0.16 : span * 0.08; // 양수 막대 위 라벨 여유
+    const botPad = dataMin < 0 ? span * 0.16 : 0;           // 음수 막대 아래 라벨 여유
+    const axisMax = dataMax + topPad;
+    const axisMin = dataMin - botPad;
+    const step = niceStep(axisMax - axisMin, 5);
+    const minorStep = step / 2;
+
+    // ---- 세로 축 눈금 값 (단위에 맞춰 표기) ----
+    function yTickText(v) {
+      return fmtValue(v, unitLabel); // 막대와 동일 규칙(억원 콤마 / 조원 소수1자리)
+    }
+    const kStart = Math.ceil(axisMin / step);
+    const kEnd = Math.floor(axisMax / step);
+    const majorTicks = [];
+    for (let k = kStart; k <= kEnd; k++) majorTicks.push(k * step);
+
+    // y축 숫자 폭만큼 왼쪽 여백(gutter)을 확보
+    ctx.font = font(600, 24);
+    let maxLabelW = 0;
+    majorTicks.forEach(t => { maxLabelW = Math.max(maxLabelW, ctx.measureText(yTickText(t)).width); });
+    const padL = Math.max(34, Math.ceil(maxLabelW) + 18);
+
+    // ---- 레이아웃 ----
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const n = trend.length;
+    const slot = plotW / n;
+    const groupW = Math.min(180, slot * 0.8);
+    const gap = 12;
+    const barW = (groupW - gap) / 2;
+
+    const plotTop = oy + padT;
+    const plotBottom = oy + padT + plotH;
+    const plotLeft = ox + padL;
+    const plotRight = ox + W - padR;
+    function xGroupStart(i) { return plotLeft + slot * i + (slot - groupW) / 2; }
+    function yFor(v) { return plotBottom - ((v - axisMin) / (axisMax - axisMin)) * plotH; }
+    const zeroY = yFor(0);
+
+    // ---- 보조 눈금선(주 눈금 사이, 가장 연하게) ----
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(60,62,70,0.045)';
+    const mStart = Math.ceil(axisMin / minorStep);
+    const mEnd = Math.floor(axisMax / minorStep);
+    for (let k = mStart; k <= mEnd; k++) {
+      if (k % 2 === 0) continue;            // 주 눈금과 겹치는 위치는 건너뜀
+      const gy = yFor(k * minorStep);
+      ctx.beginPath();
+      ctx.moveTo(plotLeft, gy);
+      ctx.lineTo(plotRight, gy);
+      ctx.stroke();
+    }
+    // ---- 주 눈금선(연하게) + 세로 값 ----
+    ctx.strokeStyle = 'rgba(60,62,70,0.11)';
+    majorTicks.forEach(t => {
+      const gy = yFor(t);
+      if (Math.abs(t) > 1e-6) {              // 0선은 아래에서 진하게 별도로 그림
+        ctx.beginPath();
+        ctx.moveTo(plotLeft, gy);
+        ctx.lineTo(plotRight, gy);
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+
+    // 세로 축 숫자 (왼쪽, 각 눈금선에 정렬)
+    ctx.save();
+    ctx.font = font(600, 24);
+    ctx.fillStyle = '#9AA0A8';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    majorTicks.forEach(t => {
+      ctx.fillText(yTickText(t), plotLeft - 12, yFor(t));
+    });
+    ctx.restore();
+    ctx.textBaseline = 'alphabetic';
+
+    // ---- 0선(기준선) ----
+    ctx.beginPath();
+    ctx.strokeStyle = '#C9C6BC';
+    ctx.lineWidth = 2;
+    ctx.moveTo(plotLeft, zeroY);
+    ctx.lineTo(plotRight, zeroY);
+    ctx.stroke();
+
+    trend.forEach((d, i) => {
+      const isLast = i === n - 1, isFirst = i === 0;
+      const gx = xGroupStart(i);
+      const revX = gx, opX = gx + barW + gap;
+
+      drawBar(ctx, revX, barW, d.revenue, revColor, zeroY, yFor);
+      drawBar(ctx, opX, barW, d.opProfit, opColor, zeroY, yFor);
+
+      const valFontSize = isLast ? 36 : 32;
+      const valGap = isLast ? 20 : 16;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isLast ? opColor : INK;
+      ctx.font = font(800, valFontSize);
+      drawBarLabel(ctx, fmtValue(d.revenue, unitLabel), revX + barW / 2, d.revenue, zeroY, yFor, valGap, valFontSize);
+      drawBarLabel(ctx, fmtValue(d.opProfit, unitLabel), opX + barW / 2, d.opProfit, zeroY, yFor, valGap, valFontSize);
+
+      const cx = gx + groupW / 2;
+      const qFontSize = isLast ? 36 : 32;
+      ctx.font = font(800, qFontSize);
+      ctx.fillStyle = isLast ? opColor : INK;
+      ctx.fillText(d.q + '분기', cx, plotBottom + 46);
+
+      if (isFirst || isLast) {
+        ctx.font = font(600, 32);
+        ctx.fillStyle = INK_SOFT;
+        ctx.fillText(d.year + '년', cx, plotBottom + 46 + qFontSize + 8);
+      }
+    });
+  }
+
+  // ---------- 종이 질감(미세 무채색 그레인) ----------
+  // #fafaf8 위에 얹는 아주 곱고 균일한 매트 그레인. r·g·b에 동일한 편차만 주어
+  // 색조를 더하지 않고(무채색), 진폭을 작게 해 표면이 깨끗하고 매끄럽게 보이도록 한다.
+  let _paperTile = null;
+  function getPaperTile() {
+    if (_paperTile) return _paperTile;
+    const S = 512;
+    const t = document.createElement('canvas');
+    t.width = S; t.height = S;
+    const tctx = t.getContext('2d');
+    const img = tctx.createImageData(S, S);
+    const data = img.data;
+    const baseR = 250, baseG = 250, baseB = 248; // #fafaf8
+    const D = 5; // 그레인 진폭(아주 미세)
+    for (let i = 0; i < data.length; i += 4) {
+      let d = (Math.random() - 0.5) * 2 * D;         // 균일 무채색 노이즈
+      if (Math.random() < 0.05) d += (Math.random() - 0.5) * 2 * D; // 드문 미립자
+      d = Math.round(d);
+      data[i] = baseR + d;
+      data[i + 1] = baseG + d;
+      data[i + 2] = baseB + d;
+      data[i + 3] = 255;
+    }
+    tctx.putImageData(img, 0, 0);
+    _paperTile = t;
+    return _paperTile;
+  }
+  function drawPaperTexture(ctx) {
+    const pat = ctx.createPattern(getPaperTile(), 'repeat');
+    if (!pat) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // 디바이스 픽셀 기준 → 미리보기/내보내기 모두 고운 입자 유지
+    ctx.fillStyle = pat;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  }
+
+  // 오버레이 이미지 1장을 중심 기준 회전 + 투명도로 그림
+  function paintOverlay(ctx, ov) {
+    if (!ov.img) return;
+    ctx.save();
+    ctx.globalAlpha = (ov.opacity == null ? 1 : ov.opacity);
+    ctx.translate(ov.cx, ov.cy);
+    ctx.rotate(ov.rot || 0);
+    ctx.drawImage(ov.img, -ov.w / 2, -ov.h / 2, ov.w, ov.h);
+    ctx.restore();
+  }
+
+  function drawCard(ctx, data, revColor, opColor, showGuide) {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = '#fafaf8';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    drawPaperTexture(ctx); // 미세 매트 종이 질감
+
+    // ---- '맨 뒤로' 지정 이미지: 차트/텍스트보다 먼저 그려서 뒤에 깔림 ----
+    overlays.forEach(function (ov) {
+      if (ov.layer === 'back') paintOverlay(ctx, ov);
+    });
+
+    const trend = data.trend;
+    const maxAll = Math.max(...trend.map(d => Math.max(Math.abs(d.revenue), Math.abs(d.opProfit))));
+    // 매출·영업이익 중 최댓값이 10조원(=100,000억) 이상이면 조원 단위, 아니면 억원
+    const unitLabel = maxAll >= 100000 ? '조원' : '억원';
+
+    let cursorY = SAFE_TOP;
+    const contentX = SAFE_LEFT;
+
+    ctx.textBaseline = 'alphabetic';
+    const suffix = '실적 추이';
+    const fullText = data.companyName + ' ' + suffix;
+    const HEAD_MAX = 96, WRAP_BELOW = 60, TWO_MIN = 64;
+
+    // 기본은 한 줄(폭에 맞춰 축소). 한 줄 크기가 WRAP_BELOW보다 작아지는
+    // '아주 긴 이름'일 때만 두 줄(회사명 / 실적 추이)로 전환한다.
+    const oneSize = fitFontSize(ctx, fullText, 900, HEAD_MAX, 40, CONTENT_W);
+    let headerLines, headerSize;
+    if (oneSize >= WRAP_BELOW) {
+      headerLines = [fullText];
+      headerSize = oneSize;
+    } else {
+      headerSize = fitFontSize(ctx, data.companyName, 900, HEAD_MAX, TWO_MIN, CONTENT_W);
+      headerLines = [data.companyName, suffix];
+    }
+
+    ctx.font = font(900, headerSize);
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'left';
+    const headlineLineH = headerSize * 1.1;
+    cursorY += headlineLineH * 0.92;
+    ctx.fillText(headerLines[0], contentX, cursorY);
+    for (let i = 1; i < headerLines.length; i++) {
+      cursorY += headlineLineH;
+      ctx.fillText(headerLines[i], contentX, cursorY);
+    }
+
+    cursorY += headlineLineH * 0.18 + 22;
+
+    const legendY = cursorY + 20;
+    ctx.font = font(700, 27);
+    ctx.textAlign = 'left';
+    let lx = contentX;
+    const swatch = 28;
+    ctx.fillStyle = revColor;
+    ctx.beginPath(); roundRectPath(ctx, lx, legendY - swatch + 6, swatch, swatch, 4); ctx.fill();
+    lx += swatch + 10;
+    ctx.fillStyle = INK;
+    ctx.fillText('매출', lx, legendY);
+    lx += ctx.measureText('매출').width + 30;
+    ctx.fillStyle = opColor;
+    ctx.beginPath(); roundRectPath(ctx, lx, legendY - swatch + 6, swatch, swatch, 4); ctx.fill();
+    lx += swatch + 10;
+    ctx.fillStyle = INK;
+    ctx.fillText('영업이익', lx, legendY);
+
+    ctx.font = font(600, 27);
+    ctx.fillStyle = INK_SOFT;
+    ctx.textAlign = 'right';
+    ctx.fillText('연결 기준, 단위 : ' + unitLabel, contentX + CONTENT_W, legendY - 2);
+
+    cursorY = legendY + 6 + 24;
+
+    // 출처/핸들 줄을 하단 데드존 한계까지 내리고, 차트는 남는 높이를 채운다.
+    // (제목 크기를 고정해도 레이아웃이 항상 맞도록 차트 높이를 가변으로.)
+    const RULE_Y = (CANVAS_H - SAFE_BOTTOM - 7) - (18 + 27 * 0.85);
+    const chartTop = cursorY;
+    const chartH = Math.round(RULE_Y - 16 - chartTop);
+    drawChart(ctx, trend, revColor, opColor, contentX, chartTop, CONTENT_W, chartH, unitLabel);
+    cursorY = chartTop + chartH + 16;
+
+    ctx.beginPath();
+    ctx.strokeStyle = RULE;
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(contentX, cursorY);
+    ctx.lineTo(contentX + CONTENT_W, cursorY);
+    ctx.stroke();
+
+    ctx.font = font(700, 27);
+    ctx.fillStyle = '#3A3E46';
+    ctx.textAlign = 'left';
+    ctx.fillText('자료 : 금융감독원 전자공시시스템(DART)', contentX, cursorY + 18 + 27 * 0.85);
+    ctx.textAlign = 'right';
+    ctx.fillText('@돈굴돈굴', contentX + CONTENT_W, cursorY + 18 + 27 * 0.85);
+    ctx.textAlign = 'left';
+
+    // ---- '맨 앞으로' 지정 이미지: 맨 위에 그림 ('back'은 이미 뒤에 그려짐) ----
+    overlays.forEach(function (ov) {
+      if (ov.layer !== 'back') paintOverlay(ctx, ov);
+    });
+
+    if (showGuide) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(214,54,44,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 5]);
+      ctx.strokeRect(SAFE_LEFT, SAFE_TOP, CONTENT_W, CONTENT_H);
+      ctx.restore();
+    }
+  }
+
+  // ---------- font loading ----------
+  function ensureFonts() {
+    const weights = ['400', '500', '600', '700', '800', '900'];
+    const specs = weights.map(w => document.fonts.load(w + ' 32px "Noto Sans KR"'));
+    return Promise.all(specs).then(() => document.fonts.ready).catch(() => {});
+  }
+
+  // ---------- orchestration ----------
+  let lastData = null;
+  let fontsLoaded = false;
+
+  // 사용자 추가 이미지(오버레이) 상태
+  const overlays = [];        // { img, cx, cy, w, h, aspect }
+  let selectedIndex = -1;
+  const overlayEditRow = document.getElementById('overlay-edit-row');
+  const overlaySize = document.getElementById('overlay-size');
+  const overlaySizeVal = document.getElementById('overlay-size-val');
+  const overlayOpacity = document.getElementById('overlay-opacity');
+  const overlayOpacityVal = document.getElementById('overlay-opacity-val');
+  const overlayRot = document.getElementById('overlay-rot');
+  const overlayRotVal = document.getElementById('overlay-rot-val');
+
+  function syncOverlayUI() {
+    const ov = overlays[selectedIndex];
+    if (ov) {
+      overlayEditRow.style.display = 'flex';
+      overlaySize.value = Math.round(ov.w);
+      overlaySizeVal.textContent = Math.round(ov.w / CANVAS_W * 100) + '%';
+      const op = (ov.opacity == null ? 1 : ov.opacity);
+      overlayOpacity.value = Math.round(op * 100);
+      overlayOpacityVal.textContent = Math.round(op * 100) + '%';
+      const deg = Math.round((ov.rot || 0) * 180 / Math.PI);
+      overlayRot.value = deg;
+      overlayRotVal.textContent = deg + '°';
+    } else {
+      overlayEditRow.style.display = 'none';
+      overlaySizeVal.textContent = '–';
+      overlayOpacityVal.textContent = '–';
+      overlayRotVal.textContent = '–';
+    }
+  }
+
+  function drawSelection(ctx) {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ctx.save();
+    ctx.translate(ov.cx, ov.cy);
+    ctx.rotate(ov.rot || 0);
+    ctx.strokeStyle = '#2E6FD9';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 7]);
+    ctx.strokeRect(-ov.w / 2, -ov.h / 2, ov.w, ov.h);
+    ctx.restore();
+  }
+
+  // lastData 재파싱 없이 캔버스만 다시 그림(드래그/크기/색상 변경용)
+  function redraw() {
+    if (!lastData) return;
+    const { revenue, opProfit } = deriveColors(colorInput.value);
+    const ctx = canvas.getContext('2d');
+    drawCard(ctx, lastData, revenue, opProfit, chkGuide.checked);
+    drawSelection(ctx);
+  }
+
+  function doRender() {
+    errEl.style.display = 'none';
+    const raw = rawInput.value;
+    let data;
+    try {
+      data = parseReport(raw);
+    } catch (e) {
+      previewWrap.style.display = 'none';
+      downloadRow.style.display = 'none';
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+      return;
+    }
+    lastData = data;
+    redraw();
+    previewWrap.style.display = 'block';
+    downloadRow.style.display = 'flex';
+  }
+
+  async function render() {
+    if (!fontsLoaded) {
+      await ensureFonts();
+      fontsLoaded = true;
+    }
+    doRender();
+  }
+
+  document.getElementById('btn-render').addEventListener('click', render);
+  document.getElementById('btn-clear').addEventListener('click', function () {
+    rawInput.value = '';
+    previewWrap.style.display = 'none';
+    downloadRow.style.display = 'none';
+    errEl.style.display = 'none';
+  });
+  chkGuide.addEventListener('change', function () { redraw(); });
+  colorInput.addEventListener('input', function () { redraw(); });
+
+  // ---------- 사용자 추가 이미지(오버레이) ----------
+  const overlayInput = document.getElementById('overlay-input');
+  overlayInput.addEventListener('change', function (e) {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    files.forEach(function (file, idx) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const img = new Image();
+        img.onload = function () {
+          const aspect = img.naturalWidth / img.naturalHeight || 1;
+          // 기본 크기: 카드 폭의 25%, 단 원본보다 크게 늘리지 않음
+          let w = Math.min(CANVAS_W * 0.25, img.naturalWidth);
+          w = Math.max(80, w);
+          const ov = {
+            img: img, aspect: aspect, layer: 'front', opacity: 1, rot: 0,
+            w: w, h: w / aspect,
+            // 살짝 어긋나게 쌓아 여러 장이 겹쳐도 구분되게
+            cx: CANVAS_W / 2 + idx * 24,
+            cy: CANVAS_H / 2 + idx * 24
+          };
+          overlays.push(ov);
+          selectedIndex = overlays.length - 1;
+          syncOverlayUI();
+          if (lastData) { redraw(); } else { render(); }
+        };
+        img.onerror = function () {
+          errEl.textContent = '이미지를 불러오지 못했어요. 다른 파일로 시도해주세요.';
+          errEl.style.display = 'block';
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    overlayInput.value = ''; // 같은 파일 다시 올릴 수 있게 초기화
+  });
+
+  document.getElementById('btn-overlay-clear').addEventListener('click', function () {
+    overlays.length = 0;
+    selectedIndex = -1;
+    syncOverlayUI();
+    if (lastData) redraw();
+  });
+  document.getElementById('btn-overlay-delete').addEventListener('click', function () {
+    if (selectedIndex < 0) return;
+    overlays.splice(selectedIndex, 1);
+    selectedIndex = -1;
+    syncOverlayUI();
+    redraw();
+  });
+  document.getElementById('btn-overlay-front').addEventListener('click', function () {
+    if (selectedIndex < 0) return;
+    const ov = overlays.splice(selectedIndex, 1)[0];
+    ov.layer = 'front';       // 차트/텍스트보다 앞
+    overlays.push(ov);        // front 그룹에서 가장 앞
+    selectedIndex = overlays.length - 1;
+    syncOverlayUI();
+    redraw();
+  });
+  document.getElementById('btn-overlay-back').addEventListener('click', function () {
+    if (selectedIndex < 0) return;
+    const ov = overlays.splice(selectedIndex, 1)[0];
+    ov.layer = 'back';        // 차트/텍스트보다 뒤(배경처럼 깔림)
+    overlays.unshift(ov);     // 가장 뒤로
+    selectedIndex = 0;
+    syncOverlayUI();
+    redraw();
+  });
+  overlaySize.addEventListener('input', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ov.w = parseFloat(overlaySize.value);
+    ov.h = ov.w / ov.aspect;
+    overlaySizeVal.textContent = Math.round(ov.w / CANVAS_W * 100) + '%';
+    redraw();
+  });
+  overlayOpacity.addEventListener('input', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ov.opacity = parseFloat(overlayOpacity.value) / 100;
+    overlayOpacityVal.textContent = Math.round(ov.opacity * 100) + '%';
+    redraw();
+  });
+  overlayRot.addEventListener('input', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    const deg = parseFloat(overlayRot.value);
+    ov.rot = deg * Math.PI / 180;
+    overlayRotVal.textContent = Math.round(deg) + '°';
+    redraw();
+  });
+  document.getElementById('btn-overlay-rot-reset').addEventListener('click', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ov.rot = 0;
+    overlayRot.value = 0;
+    overlayRotVal.textContent = '0°';
+    redraw();
+  });
+
+  // ---------- 미리보기 위 드래그로 위치 이동 ----------
+  function toCanvasCoords(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (CANVAS_W / r.width),
+      y: (e.clientY - r.top) * (CANVAS_H / r.height)
+    };
+  }
+  function hitTest(p) {
+    // 위에 있는 것부터(배열 뒤쪽이 앞) 검사 (회전 고려)
+    for (let i = overlays.length - 1; i >= 0; i--) {
+      const ov = overlays[i];
+      const dx = p.x - ov.cx, dy = p.y - ov.cy;
+      const a = -(ov.rot || 0);
+      const lx = dx * Math.cos(a) - dy * Math.sin(a);
+      const ly = dx * Math.sin(a) + dy * Math.cos(a);
+      if (Math.abs(lx) <= ov.w / 2 && Math.abs(ly) <= ov.h / 2) return i;
+    }
+    return -1;
+  }
+  let dragOffset = null;
+  canvas.addEventListener('pointerdown', function (e) {
+    if (!lastData) return;
+    const p = toCanvasCoords(e);
+    const hit = hitTest(p);
+    if (hit >= 0) {
+      selectedIndex = hit;
+      const ov = overlays[hit];
+      dragOffset = { dx: p.x - ov.cx, dy: p.y - ov.cy };
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    } else {
+      selectedIndex = -1;
+    }
+    syncOverlayUI();
+    redraw();
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (dragOffset && selectedIndex >= 0) {
+      const p = toCanvasCoords(e);
+      const ov = overlays[selectedIndex];
+      ov.cx = Math.max(0, Math.min(CANVAS_W, p.x - dragOffset.dx));
+      ov.cy = Math.max(0, Math.min(CANVAS_H, p.y - dragOffset.dy));
+      redraw();
+      e.preventDefault();
+    } else if (lastData && overlays.length) {
+      const over = hitTest(toCanvasCoords(e)) >= 0;
+      canvas.style.cursor = over ? 'grab' : 'default';
+    }
+  });
+  function endDrag(e) {
+    if (dragOffset) {
+      dragOffset = null;
+      canvas.style.cursor = 'grab';
+      try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  document.getElementById('btn-download').addEventListener('click', function () {
+    if (!lastData) return;
+    const SCALE = 3; // export at 3x for crisper text/lines (3240x4050, same 4:5 ratio)
+    const offscreen = document.createElement('canvas');
+    offscreen.width = CANVAS_W * SCALE;
+    offscreen.height = CANVAS_H * SCALE;
+    const octx = offscreen.getContext('2d');
+    octx.scale(SCALE, SCALE);
+    const baseColor = colorInput.value;
+    const { revenue, opProfit } = deriveColors(baseColor);
+    drawCard(octx, lastData, revenue, opProfit, false); // never export the guide lines
+    offscreen.toBlob(function (blob) {
+      if (!blob) {
+        errEl.textContent = '이미지 생성에 실패했습니다. 브라우저를 새로고침한 뒤 다시 시도해주세요.';
+        errEl.style.display = 'block';
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = lastData.companyName + '_' + lastData.trend[lastData.trend.length - 1].label + '_' + (CANVAS_W * SCALE) + 'x' + (CANVAS_H * SCALE) + '.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }, 'image/png');
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
