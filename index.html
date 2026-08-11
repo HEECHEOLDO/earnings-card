@@ -134,6 +134,12 @@
         <span id="overlay-opacity-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
       </label>
       <span class="ctl-sep"></span>
+      <label class="toggle-row" style="gap:10px;">회전
+        <input type="range" id="overlay-rot" min="-180" max="180" step="1" style="width:150px; height:28px;">
+        <span id="overlay-rot-val" style="font-size:13px; color:#4B4F58; min-width:46px;">–</span>
+      </label>
+      <button class="btn-ghost" id="btn-overlay-rot-reset" type="button">0°</button>
+      <span class="ctl-sep"></span>
       <span class="ctl-group-label">순서</span>
       <button class="btn-ghost" id="btn-overlay-front" type="button">맨 앞으로</button>
       <button class="btn-ghost" id="btn-overlay-back" type="button">맨 뒤로</button>
@@ -501,6 +507,17 @@
     ctx.restore();
   }
 
+  // 오버레이 이미지 1장을 중심 기준 회전 + 투명도로 그림
+  function paintOverlay(ctx, ov) {
+    if (!ov.img) return;
+    ctx.save();
+    ctx.globalAlpha = (ov.opacity == null ? 1 : ov.opacity);
+    ctx.translate(ov.cx, ov.cy);
+    ctx.rotate(ov.rot || 0);
+    ctx.drawImage(ov.img, -ov.w / 2, -ov.h / 2, ov.w, ov.h);
+    ctx.restore();
+  }
+
   function drawCard(ctx, data, revColor, opColor, showGuide) {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.fillStyle = '#fafaf8';
@@ -509,11 +526,7 @@
 
     // ---- '맨 뒤로' 지정 이미지: 차트/텍스트보다 먼저 그려서 뒤에 깔림 ----
     overlays.forEach(function (ov) {
-      if (ov.layer === 'back' && ov.img) {
-        ctx.globalAlpha = (ov.opacity == null ? 1 : ov.opacity);
-        ctx.drawImage(ov.img, ov.cx - ov.w / 2, ov.cy - ov.h / 2, ov.w, ov.h);
-        ctx.globalAlpha = 1;
-      }
+      if (ov.layer === 'back') paintOverlay(ctx, ov);
     });
 
     const trend = data.trend;
@@ -603,11 +616,7 @@
 
     // ---- '맨 앞으로' 지정 이미지: 맨 위에 그림 ('back'은 이미 뒤에 그려짐) ----
     overlays.forEach(function (ov) {
-      if (ov.layer !== 'back' && ov.img) {
-        ctx.globalAlpha = (ov.opacity == null ? 1 : ov.opacity);
-        ctx.drawImage(ov.img, ov.cx - ov.w / 2, ov.cy - ov.h / 2, ov.w, ov.h);
-        ctx.globalAlpha = 1;
-      }
+      if (ov.layer !== 'back') paintOverlay(ctx, ov);
     });
 
     if (showGuide) {
@@ -639,6 +648,8 @@
   const overlaySizeVal = document.getElementById('overlay-size-val');
   const overlayOpacity = document.getElementById('overlay-opacity');
   const overlayOpacityVal = document.getElementById('overlay-opacity-val');
+  const overlayRot = document.getElementById('overlay-rot');
+  const overlayRotVal = document.getElementById('overlay-rot-val');
 
   function syncOverlayUI() {
     const ov = overlays[selectedIndex];
@@ -649,10 +660,14 @@
       const op = (ov.opacity == null ? 1 : ov.opacity);
       overlayOpacity.value = Math.round(op * 100);
       overlayOpacityVal.textContent = Math.round(op * 100) + '%';
+      const deg = Math.round((ov.rot || 0) * 180 / Math.PI);
+      overlayRot.value = deg;
+      overlayRotVal.textContent = deg + '°';
     } else {
       overlayEditRow.style.display = 'none';
       overlaySizeVal.textContent = '–';
       overlayOpacityVal.textContent = '–';
+      overlayRotVal.textContent = '–';
     }
   }
 
@@ -660,10 +675,12 @@
     const ov = overlays[selectedIndex];
     if (!ov) return;
     ctx.save();
+    ctx.translate(ov.cx, ov.cy);
+    ctx.rotate(ov.rot || 0);
     ctx.strokeStyle = '#2E6FD9';
     ctx.lineWidth = 3;
     ctx.setLineDash([10, 7]);
-    ctx.strokeRect(ov.cx - ov.w / 2, ov.cy - ov.h / 2, ov.w, ov.h);
+    ctx.strokeRect(-ov.w / 2, -ov.h / 2, ov.w, ov.h);
     ctx.restore();
   }
 
@@ -727,7 +744,7 @@
           let w = Math.min(CANVAS_W * 0.25, img.naturalWidth);
           w = Math.max(80, w);
           const ov = {
-            img: img, aspect: aspect, layer: 'front', opacity: 1,
+            img: img, aspect: aspect, layer: 'front', opacity: 1, rot: 0,
             w: w, h: w / aspect,
             // 살짝 어긋나게 쌓아 여러 장이 겹쳐도 구분되게
             cx: CANVAS_W / 2 + idx * 24,
@@ -795,6 +812,22 @@
     overlayOpacityVal.textContent = Math.round(ov.opacity * 100) + '%';
     redraw();
   });
+  overlayRot.addEventListener('input', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    const deg = parseFloat(overlayRot.value);
+    ov.rot = deg * Math.PI / 180;
+    overlayRotVal.textContent = Math.round(deg) + '°';
+    redraw();
+  });
+  document.getElementById('btn-overlay-rot-reset').addEventListener('click', function () {
+    const ov = overlays[selectedIndex];
+    if (!ov) return;
+    ov.rot = 0;
+    overlayRot.value = 0;
+    overlayRotVal.textContent = '0°';
+    redraw();
+  });
 
   // ---------- 미리보기 위 드래그로 위치 이동 ----------
   function toCanvasCoords(e) {
@@ -805,13 +838,14 @@
     };
   }
   function hitTest(p) {
-    // 위에 있는 것부터(배열 뒤쪽이 앞) 검사
+    // 위에 있는 것부터(배열 뒤쪽이 앞) 검사 (회전 고려)
     for (let i = overlays.length - 1; i >= 0; i--) {
       const ov = overlays[i];
-      if (p.x >= ov.cx - ov.w / 2 && p.x <= ov.cx + ov.w / 2 &&
-          p.y >= ov.cy - ov.h / 2 && p.y <= ov.cy + ov.h / 2) {
-        return i;
-      }
+      const dx = p.x - ov.cx, dy = p.y - ov.cy;
+      const a = -(ov.rot || 0);
+      const lx = dx * Math.cos(a) - dy * Math.sin(a);
+      const ly = dx * Math.sin(a) + dy * Math.cos(a);
+      if (Math.abs(lx) <= ov.w / 2 && Math.abs(ly) <= ov.h / 2) return i;
     }
     return -1;
   }
