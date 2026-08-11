@@ -103,8 +103,8 @@
 <body>
   <div class="shell">
     <div class="intro">
-      <h1>분기 실적 카드 생성기 (뉴스 인포그래픽 스타일)</h1>
-      <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 50px는 데드존으로 비워둡니다.</p>
+      <h1>분기 실적 카드 생성기</h1>
+      <p>공시 문자를 붙여넣으면 매출·영업이익 추이를 1080×1350px(4:5) 카드로 만듭니다. 상하 135px·좌우 100px는 데드존으로 비워둡니다.</p>
     </div>
     <textarea id="raw-input" spellcheck="false"></textarea>
     <div class="controls">
@@ -154,8 +154,8 @@
 <script>
 (function () {
   const CANVAS_W = 1080, CANVAS_H = 1350;
-  const SAFE_TOP = 135, SAFE_BOTTOM = 135, SAFE_LEFT = 50, SAFE_RIGHT = 50;
-  const CONTENT_W = CANVAS_W - SAFE_LEFT - SAFE_RIGHT; // 980
+  const SAFE_TOP = 135, SAFE_BOTTOM = 135, SAFE_LEFT = 100, SAFE_RIGHT = 100;
+  const CONTENT_W = CANVAS_W - SAFE_LEFT - SAFE_RIGHT; // 880
   const CONTENT_H = CANVAS_H - SAFE_TOP - SAFE_BOTTOM;  // 1080
   const INK = '#101216', INK_SOFT = '#6B7078', RULE = '#E6E4DD';
 
@@ -187,17 +187,14 @@
   // ---------- parsing ----------
   function toNumber(str) { return parseFloat(String(str).replace(/,/g, '').trim()); }
 
-  function fmtWon(eok) {
-    if (eok === null || eok === undefined || isNaN(eok)) return '-';
-    const sign = eok < 0 ? '-' : '';
-    const abs = Math.abs(eok);
-    if (abs >= 10000) {
-      const jo = Math.floor(abs / 10000);
-      const rem = Math.round(abs - jo * 10000);
-      if (rem === 0) return sign + jo + '조';
-      return sign + jo + '조 ' + rem.toLocaleString('ko-KR');
+  function fmtValue(v, unit) {
+    if (v === null || v === undefined || isNaN(v)) return '-';
+    if (unit === '조원') {
+      const jo = (Math.round(v / 10000 * 10) / 10) || 0; // 조 단위, 소수 1자리 반올림
+      return jo.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     }
-    return sign + Math.round(abs).toLocaleString('ko-KR');
+    // 억원: 콤마 정수 (예: 21,503 / -104)
+    return (Math.round(v) || 0).toLocaleString('ko-KR');
   }
 
   function parseReport(text) {
@@ -360,11 +357,7 @@
 
     // ---- 세로 축 눈금 값 (단위에 맞춰 표기) ----
     function yTickText(v) {
-      if (unitLabel === '조원') {
-        const jo = (Math.round((v / 10000) * 10) / 10) || 0;
-        return jo.toLocaleString('ko-KR');
-      }
-      return (Math.round(v) || 0).toLocaleString('ko-KR');
+      return fmtValue(v, unitLabel); // 막대와 동일 규칙(억원 콤마 / 조원 소수1자리)
     }
     const kStart = Math.ceil(axisMin / step);
     const kEnd = Math.floor(axisMax / step);
@@ -449,16 +442,16 @@
       drawBar(ctx, revX, barW, d.revenue, revColor, zeroY, yFor);
       drawBar(ctx, opX, barW, d.opProfit, opColor, zeroY, yFor);
 
-      const valFontSize = isLast ? 40 : 32;
+      const valFontSize = isLast ? 38 : 32;
       const valGap = isLast ? 20 : 16;
       ctx.textAlign = 'center';
-      ctx.fillStyle = INK;
+      ctx.fillStyle = isLast ? opColor : INK;
       ctx.font = font(800, valFontSize);
-      drawBarLabel(ctx, fmtWon(d.revenue), revX + barW / 2, d.revenue, zeroY, yFor, valGap, valFontSize);
-      drawBarLabel(ctx, fmtWon(d.opProfit), opX + barW / 2, d.opProfit, zeroY, yFor, valGap, valFontSize);
+      drawBarLabel(ctx, fmtValue(d.revenue, unitLabel), revX + barW / 2, d.revenue, zeroY, yFor, valGap, valFontSize);
+      drawBarLabel(ctx, fmtValue(d.opProfit, unitLabel), opX + barW / 2, d.opProfit, zeroY, yFor, valGap, valFontSize);
 
       const cx = gx + groupW / 2;
-      const qFontSize = isLast ? 40 : 32;
+      const qFontSize = isLast ? 38 : 32;
       ctx.font = font(800, qFontSize);
       ctx.fillStyle = isLast ? opColor : INK;
       ctx.fillText(d.q + '분기', cx, plotBottom + 46);
@@ -524,21 +517,40 @@
     });
 
     const trend = data.trend;
-    const maxAll = Math.max(...trend.map(d => Math.max(d.revenue, d.opProfit)));
-    const unitLabel = maxAll >= 10000 ? '조원' : '억원';
+    const maxAll = Math.max(...trend.map(d => Math.max(Math.abs(d.revenue), Math.abs(d.opProfit))));
+    // 매출·영업이익 중 최댓값이 10조원(=100,000억) 이상이면 조원 단위, 아니면 억원
+    const unitLabel = maxAll >= 100000 ? '조원' : '억원';
 
     let cursorY = SAFE_TOP;
     const contentX = SAFE_LEFT;
 
     ctx.textBaseline = 'alphabetic';
-    const headlineText = data.companyName + ' 실적 추이';
-    const headlineSize = fitFontSize(ctx, headlineText, 900, 76, 30, CONTENT_W);
-    ctx.font = font(900, headlineSize);
+    const suffix = '실적 추이';
+    const fullText = data.companyName + ' ' + suffix;
+    const HEAD_MAX = 96, WRAP_BELOW = 60, TWO_MIN = 64;
+
+    // 기본은 한 줄(폭에 맞춰 축소). 한 줄 크기가 WRAP_BELOW보다 작아지는
+    // '아주 긴 이름'일 때만 두 줄(회사명 / 실적 추이)로 전환한다.
+    const oneSize = fitFontSize(ctx, fullText, 900, HEAD_MAX, 40, CONTENT_W);
+    let headerLines, headerSize;
+    if (oneSize >= WRAP_BELOW) {
+      headerLines = [fullText];
+      headerSize = oneSize;
+    } else {
+      headerSize = fitFontSize(ctx, data.companyName, 900, HEAD_MAX, TWO_MIN, CONTENT_W);
+      headerLines = [data.companyName, suffix];
+    }
+
+    ctx.font = font(900, headerSize);
     ctx.fillStyle = INK;
     ctx.textAlign = 'left';
-    const headlineLineH = headlineSize * 1.1;
+    const headlineLineH = headerSize * 1.1;
     cursorY += headlineLineH * 0.92;
-    ctx.fillText(headlineText, contentX, cursorY);
+    ctx.fillText(headerLines[0], contentX, cursorY);
+    for (let i = 1; i < headerLines.length; i++) {
+      cursorY += headlineLineH;
+      ctx.fillText(headerLines[i], contentX, cursorY);
+    }
 
     cursorY += headlineLineH * 0.18 + 22;
 
@@ -566,8 +578,11 @@
 
     cursorY = legendY + 6 + 24;
 
-    const chartH = 780;
+    // 출처/핸들 줄을 하단 데드존 한계까지 내리고, 차트는 남는 높이를 채운다.
+    // (제목 크기를 고정해도 레이아웃이 항상 맞도록 차트 높이를 가변으로.)
+    const RULE_Y = (CANVAS_H - SAFE_BOTTOM - 7) - (18 + 27 * 0.85);
     const chartTop = cursorY;
+    const chartH = Math.round(RULE_Y - 16 - chartTop);
     drawChart(ctx, trend, revColor, opColor, contentX, chartTop, CONTENT_W, chartH, unitLabel);
     cursorY = chartTop + chartH + 16;
 
