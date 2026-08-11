@@ -442,7 +442,7 @@
       drawBar(ctx, revX, barW, d.revenue, revColor, zeroY, yFor);
       drawBar(ctx, opX, barW, d.opProfit, opColor, zeroY, yFor);
 
-      const valFontSize = isLast ? 38 : 32;
+      const valFontSize = isLast ? 36 : 32;
       const valGap = isLast ? 20 : 16;
       ctx.textAlign = 'center';
       ctx.fillStyle = isLast ? opColor : INK;
@@ -451,7 +451,7 @@
       drawBarLabel(ctx, fmtValue(d.opProfit, unitLabel), opX + barW / 2, d.opProfit, zeroY, yFor, valGap, valFontSize);
 
       const cx = gx + groupW / 2;
-      const qFontSize = isLast ? 38 : 32;
+      const qFontSize = isLast ? 36 : 32;
       ctx.font = font(800, qFontSize);
       ctx.fillStyle = isLast ? opColor : INK;
       ctx.fillText(d.q + '분기', cx, plotBottom + 46);
