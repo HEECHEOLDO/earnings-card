@@ -1,3 +1,8 @@
+종이 질감을 인스타그램 피드 및 고해상도 카드 이미지에 가장 잘 어울리도록 **`D = 14`**(기존 대비 약 3배 강도) 및 미립자 발생 비율(8%)로 커스텀하여 적용한 전체 코드입니다.
+
+아래 전체 코드를 복사해서 그대로 저장한 뒤 실행하시면 됩니다.
+
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -304,8 +309,6 @@
   }
 
   // 축 범위(range)에 어울리는 "보기 좋은" 눈금 간격만 계산한다.
-  // 축 경계 자체는 데이터에 바싹 붙이고, 눈금선은 이 간격의 배수 중
-  // 범위 안에 들어오는 값에만 그린다.
   function niceStep(range, targetTicks) {
     const rawStep = (range || 1) / Math.max(1, targetTicks);
     const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
@@ -346,37 +349,31 @@
   function drawChart(ctx, trend, revColor, opColor, ox, oy, W, H, unitLabel) {
     const padR = 34, padT = 20, padB = 118;
 
-    // ---- 값 범위(적자 포함) 계산 ----
-    // 축 경계는 실제 데이터에 바싹 붙여 계산해 과도한 여백을 없앤다.
-    // (이렇게 해야 적자 막대와 하단 분기 라벨 사이가 벌어지지 않는다.)
     const values = [];
     trend.forEach(d => { values.push(d.revenue, d.opProfit); });
     const dataMax = Math.max(...values, 0);
     const dataMin = Math.min(...values, 0);
     const span = (dataMax - dataMin) || 1;
-    const topPad = dataMax > 0 ? span * 0.16 : span * 0.08; // 양수 막대 위 라벨 여유
-    const botPad = dataMin < 0 ? span * 0.16 : 0;           // 음수 막대 아래 라벨 여유
+    const topPad = dataMax > 0 ? span * 0.16 : span * 0.08;
+    const botPad = dataMin < 0 ? span * 0.16 : 0;
     const axisMax = dataMax + topPad;
     const axisMin = dataMin - botPad;
     const step = niceStep(axisMax - axisMin, 5);
     const minorStep = step / 2;
 
-    // ---- 세로 축 눈금 값 (단위에 맞춰 표기) ----
     function yTickText(v) {
-      return fmtValue(v, unitLabel); // 막대와 동일 규칙(억원 콤마 / 조원 소수1자리)
+      return fmtValue(v, unitLabel);
     }
     const kStart = Math.ceil(axisMin / step);
     const kEnd = Math.floor(axisMax / step);
     const majorTicks = [];
     for (let k = kStart; k <= kEnd; k++) majorTicks.push(k * step);
 
-    // y축 숫자 폭만큼 왼쪽 여백(gutter)을 확보
     ctx.font = font(600, 24);
     let maxLabelW = 0;
     majorTicks.forEach(t => { maxLabelW = Math.max(maxLabelW, ctx.measureText(yTickText(t)).width); });
     const padL = Math.max(34, Math.ceil(maxLabelW) + 18);
 
-    // ---- 레이아웃 ----
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const n = trend.length;
@@ -393,25 +390,24 @@
     function yFor(v) { return plotBottom - ((v - axisMin) / (axisMax - axisMin)) * plotH; }
     const zeroY = yFor(0);
 
-    // ---- 보조 눈금선(주 눈금 사이, 가장 연하게) ----
     ctx.save();
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(60,62,70,0.045)';
     const mStart = Math.ceil(axisMin / minorStep);
     const mEnd = Math.floor(axisMax / minorStep);
     for (let k = mStart; k <= mEnd; k++) {
-      if (k % 2 === 0) continue;            // 주 눈금과 겹치는 위치는 건너뜀
+      if (k % 2 === 0) continue;
       const gy = yFor(k * minorStep);
       ctx.beginPath();
       ctx.moveTo(plotLeft, gy);
       ctx.lineTo(plotRight, gy);
       ctx.stroke();
     }
-    // ---- 주 눈금선(연하게) + 세로 값 ----
+
     ctx.strokeStyle = 'rgba(60,62,70,0.11)';
     majorTicks.forEach(t => {
       const gy = yFor(t);
-      if (Math.abs(t) > 1e-6) {              // 0선은 아래에서 진하게 별도로 그림
+      if (Math.abs(t) > 1e-6) {
         ctx.beginPath();
         ctx.moveTo(plotLeft, gy);
         ctx.lineTo(plotRight, gy);
@@ -420,7 +416,6 @@
     });
     ctx.restore();
 
-    // 세로 축 숫자 (왼쪽, 각 눈금선에 정렬)
     ctx.save();
     ctx.font = font(600, 24);
     ctx.fillStyle = '#9AA0A8';
@@ -432,7 +427,6 @@
     ctx.restore();
     ctx.textBaseline = 'alphabetic';
 
-    // ---- 0선(기준선) ----
     ctx.beginPath();
     ctx.strokeStyle = '#C9C6BC';
     ctx.lineWidth = 2;
@@ -470,9 +464,7 @@
     });
   }
 
-  // ---------- 종이 질감(미세 무채색 그레인) ----------
-  // #fafaf8 위에 얹는 아주 곱고 균일한 매트 그레인. r·g·b에 동일한 편차만 주어
-  // 색조를 더하지 않고(무채색), 진폭을 작게 해 표면이 깨끗하고 매끄럽게 보이도록 한다.
+  // ---------- 종이 질감(강화된 매트 종이 그레인) ----------
   let _paperTile = null;
   function getPaperTile() {
     if (_paperTile) return _paperTile;
@@ -483,10 +475,13 @@
     const img = tctx.createImageData(S, S);
     const data = img.data;
     const baseR = 250, baseG = 250, baseB = 248; // #fafaf8
-    const D = 12; // 그레인 진폭(아주 미세)
+    
+    // D = 14로 변경하여 매트 용지의 고급스러운 오돌토돌한 질감을 구현
+    const D = 14; 
+    
     for (let i = 0; i < data.length; i += 4) {
-      let d = (Math.random() - 0.5) * 2 * D;         // 균일 무채색 노이즈
-      if (Math.random() < 0.05) d += (Math.random() - 0.5) * 2 * D; // 드문 미립자
+      let d = (Math.random() - 0.5) * 2 * D;                 // 균일 무채색 노이즈
+      if (Math.random() < 0.08) d += (Math.random() - 0.5) * 2.5 * D; // 미세 종이 입자 표면
       d = Math.round(d);
       data[i] = baseR + d;
       data[i + 1] = baseG + d;
@@ -497,17 +492,17 @@
     _paperTile = t;
     return _paperTile;
   }
+
   function drawPaperTexture(ctx) {
     const pat = ctx.createPattern(getPaperTile(), 'repeat');
     if (!pat) return;
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // 디바이스 픽셀 기준 → 미리보기/내보내기 모두 고운 입자 유지
+    ctx.setTransform(1, 0, 0, 1, 0, 0); 
     ctx.fillStyle = pat;
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.restore();
   }
 
-  // 오버레이 이미지 1장을 중심 기준 회전 + 투명도로 그림
   function paintOverlay(ctx, ov) {
     if (!ov.img) return;
     ctx.save();
@@ -522,16 +517,14 @@
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     ctx.fillStyle = '#fafaf8';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    drawPaperTexture(ctx); // 미세 매트 종이 질감
+    drawPaperTexture(ctx); 
 
-    // ---- '맨 뒤로' 지정 이미지: 차트/텍스트보다 먼저 그려서 뒤에 깔림 ----
     overlays.forEach(function (ov) {
       if (ov.layer === 'back') paintOverlay(ctx, ov);
     });
 
     const trend = data.trend;
     const maxAll = Math.max(...trend.map(d => Math.max(Math.abs(d.revenue), Math.abs(d.opProfit))));
-    // 매출·영업이익 중 최댓값이 10조원(=100,000억) 이상이면 조원 단위, 아니면 억원
     const unitLabel = maxAll >= 100000 ? '조원' : '억원';
 
     let cursorY = SAFE_TOP;
@@ -542,8 +535,6 @@
     const fullText = data.companyName + ' ' + suffix;
     const HEAD_MAX = 96, WRAP_BELOW = 60, TWO_MIN = 64;
 
-    // 기본은 한 줄(폭에 맞춰 축소). 한 줄 크기가 WRAP_BELOW보다 작아지는
-    // '아주 긴 이름'일 때만 두 줄(회사명 / 실적 추이)로 전환한다.
     const oneSize = fitFontSize(ctx, fullText, 900, HEAD_MAX, 40, CONTENT_W);
     let headerLines, headerSize;
     if (oneSize >= WRAP_BELOW) {
@@ -591,8 +582,6 @@
 
     cursorY = legendY + 6 + 24;
 
-    // 출처/핸들 줄을 하단 데드존 한계까지 내리고, 차트는 남는 높이를 채운다.
-    // (제목 크기를 고정해도 레이아웃이 항상 맞도록 차트 높이를 가변으로.)
     const RULE_Y = (CANVAS_H - SAFE_BOTTOM - 7) - (18 + 27 * 0.85);
     const chartTop = cursorY;
     const chartH = Math.round(RULE_Y - 16 - chartTop);
@@ -614,7 +603,6 @@
     ctx.fillText('@돈굴돈굴', contentX + CONTENT_W, cursorY + 18 + 27 * 0.85);
     ctx.textAlign = 'left';
 
-    // ---- '맨 앞으로' 지정 이미지: 맨 위에 그림 ('back'은 이미 뒤에 그려짐) ----
     overlays.forEach(function (ov) {
       if (ov.layer !== 'back') paintOverlay(ctx, ov);
     });
@@ -640,8 +628,7 @@
   let lastData = null;
   let fontsLoaded = false;
 
-  // 사용자 추가 이미지(오버레이) 상태
-  const overlays = [];        // { img, cx, cy, w, h, aspect }
+  const overlays = [];
   let selectedIndex = -1;
   const overlayEditRow = document.getElementById('overlay-edit-row');
   const overlaySize = document.getElementById('overlay-size');
@@ -684,7 +671,6 @@
     ctx.restore();
   }
 
-  // lastData 재파싱 없이 캔버스만 다시 그림(드래그/크기/색상 변경용)
   function redraw() {
     if (!lastData) return;
     const { revenue, opProfit } = deriveColors(colorInput.value);
@@ -730,7 +716,6 @@
   chkGuide.addEventListener('change', function () { redraw(); });
   colorInput.addEventListener('input', function () { redraw(); });
 
-  // ---------- 사용자 추가 이미지(오버레이) ----------
   const overlayInput = document.getElementById('overlay-input');
   overlayInput.addEventListener('change', function (e) {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -740,13 +725,11 @@
         const img = new Image();
         img.onload = function () {
           const aspect = img.naturalWidth / img.naturalHeight || 1;
-          // 기본 크기: 카드 폭의 25%, 단 원본보다 크게 늘리지 않음
           let w = Math.min(CANVAS_W * 0.25, img.naturalWidth);
           w = Math.max(80, w);
           const ov = {
             img: img, aspect: aspect, layer: 'front', opacity: 1, rot: 0,
             w: w, h: w / aspect,
-            // 살짝 어긋나게 쌓아 여러 장이 겹쳐도 구분되게
             cx: CANVAS_W / 2 + idx * 24,
             cy: CANVAS_H / 2 + idx * 24
           };
@@ -763,7 +746,7 @@
       };
       reader.readAsDataURL(file);
     });
-    overlayInput.value = ''; // 같은 파일 다시 올릴 수 있게 초기화
+    overlayInput.value = '';
   });
 
   document.getElementById('btn-overlay-clear').addEventListener('click', function () {
@@ -782,8 +765,8 @@
   document.getElementById('btn-overlay-front').addEventListener('click', function () {
     if (selectedIndex < 0) return;
     const ov = overlays.splice(selectedIndex, 1)[0];
-    ov.layer = 'front';       // 차트/텍스트보다 앞
-    overlays.push(ov);        // front 그룹에서 가장 앞
+    ov.layer = 'front';
+    overlays.push(ov);
     selectedIndex = overlays.length - 1;
     syncOverlayUI();
     redraw();
@@ -791,8 +774,8 @@
   document.getElementById('btn-overlay-back').addEventListener('click', function () {
     if (selectedIndex < 0) return;
     const ov = overlays.splice(selectedIndex, 1)[0];
-    ov.layer = 'back';        // 차트/텍스트보다 뒤(배경처럼 깔림)
-    overlays.unshift(ov);     // 가장 뒤로
+    ov.layer = 'back';
+    overlays.unshift(ov);
     selectedIndex = 0;
     syncOverlayUI();
     redraw();
@@ -829,7 +812,6 @@
     redraw();
   });
 
-  // ---------- 미리보기 위 드래그로 위치 이동 ----------
   function toCanvasCoords(e) {
     const r = canvas.getBoundingClientRect();
     return {
@@ -838,7 +820,6 @@
     };
   }
   function hitTest(p) {
-    // 위에 있는 것부터(배열 뒤쪽이 앞) 검사 (회전 고려)
     for (let i = overlays.length - 1; i >= 0; i--) {
       const ov = overlays[i];
       const dx = p.x - ov.cx, dy = p.y - ov.cy;
@@ -892,7 +873,7 @@
 
   document.getElementById('btn-download').addEventListener('click', function () {
     if (!lastData) return;
-    const SCALE = 3; // export at 3x for crisper text/lines (3240x4050, same 4:5 ratio)
+    const SCALE = 3;
     const offscreen = document.createElement('canvas');
     offscreen.width = CANVAS_W * SCALE;
     offscreen.height = CANVAS_H * SCALE;
@@ -900,7 +881,7 @@
     octx.scale(SCALE, SCALE);
     const baseColor = colorInput.value;
     const { revenue, opProfit } = deriveColors(baseColor);
-    drawCard(octx, lastData, revenue, opProfit, false); // never export the guide lines
+    drawCard(octx, lastData, revenue, opProfit, false);
     offscreen.toBlob(function (blob) {
       if (!blob) {
         errEl.textContent = '이미지 생성에 실패했습니다. 브라우저를 새로고침한 뒤 다시 시도해주세요.';
@@ -920,3 +901,5 @@
 </script>
 </body>
 </html>
+
+```
