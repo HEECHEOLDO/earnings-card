@@ -483,7 +483,7 @@
     const img = tctx.createImageData(S, S);
     const data = img.data;
     const baseR = 250, baseG = 250, baseB = 248; // #fafaf8
-    const D = 5; // 그레인 진폭(아주 미세)
+    const D = 12; // 그레인 진폭(아주 미세)
     for (let i = 0; i < data.length; i += 4) {
       let d = (Math.random() - 0.5) * 2 * D;         // 균일 무채색 노이즈
       if (Math.random() < 0.05) d += (Math.random() - 0.5) * 2 * D; // 드문 미립자
